@@ -1,0 +1,192 @@
+/**
+ * Handcrafted fixture mimicking Sleeper's `/v1/players/nfl` shape. Covers IDP,
+ * inactive/retired, mixed/granular positions, full_name-only names, null ranks,
+ * and undraftable positions — so the builder is tested offline (CONVENTIONS §6).
+ * Not a test file itself.
+ */
+import type { SleeperPlayerMap } from './sleeper.js';
+
+export const SLEEPER_FIXTURE: SleeperPlayerMap = {
+  // QB — 3 provided, cap will keep 2. `qbCaleb` uses full_name only (name-split test).
+  qbCaleb: {
+    first_name: null,
+    last_name: null,
+    full_name: 'Caleb Williams',
+    position: 'QB',
+    search_rank: 1,
+    active: true,
+  },
+  qbMahomes: {
+    player_id: 'qbMahomes',
+    first_name: 'Patrick',
+    last_name: 'Mahomes',
+    position: 'QB',
+    search_rank: 5,
+    active: true,
+  },
+  qbAllen: {
+    player_id: 'qbAllen',
+    first_name: 'Josh',
+    last_name: 'Allen',
+    position: 'QB',
+    search_rank: 10,
+    active: true,
+  },
+
+  // RB — 3 provided, cap keeps 2; Moss (worst rank) is dropped.
+  rbBarkley: {
+    player_id: 'rbBarkley',
+    first_name: 'Saquon',
+    last_name: 'Barkley',
+    position: 'RB',
+    search_rank: 3,
+    active: true,
+  },
+  rbBijan: {
+    player_id: 'rbBijan',
+    first_name: 'Bijan',
+    last_name: 'Robinson',
+    position: 'RB',
+    search_rank: 8,
+    active: true,
+  },
+  rbMoss: {
+    player_id: 'rbMoss',
+    first_name: 'Zack',
+    last_name: 'Moss',
+    position: 'RB',
+    search_rank: 200,
+    active: true,
+  },
+
+  // WR — includes a null-search_rank player that must sort last and be dropped.
+  wrJefferson: {
+    player_id: 'wrJefferson',
+    first_name: 'Justin',
+    last_name: 'Jefferson',
+    position: 'WR',
+    search_rank: 1,
+    active: true,
+  },
+  wrChase: {
+    player_id: 'wrChase',
+    first_name: "Ja'Marr",
+    last_name: 'Chase',
+    position: 'WR',
+    search_rank: 2,
+    active: true,
+  },
+  wrNoRank: {
+    player_id: 'wrNoRank',
+    first_name: 'Unranked',
+    last_name: 'Receiver',
+    position: 'WR',
+    search_rank: null,
+    active: true,
+  },
+
+  teKelce: {
+    player_id: 'teKelce',
+    first_name: 'Travis',
+    last_name: 'Kelce',
+    position: 'TE',
+    search_rank: 20,
+    active: true,
+  },
+  kButker: {
+    player_id: 'kButker',
+    first_name: 'Harrison',
+    last_name: 'Butker',
+    position: 'K',
+    search_rank: 300,
+    active: true,
+  },
+  defPHI: {
+    player_id: 'PHI',
+    first_name: 'Philadelphia',
+    last_name: 'Eagles',
+    position: 'DEF',
+    search_rank: 400,
+    active: true,
+  },
+
+  // IDP — granular positions collapse to DL/LB/DB and must survive the cap.
+  dlGarrett: {
+    player_id: 'dlGarrett',
+    first_name: 'Myles',
+    last_name: 'Garrett',
+    position: 'DE',
+    fantasy_positions: ['DL'],
+    search_rank: 500,
+    active: true,
+  },
+  dlDonald: {
+    player_id: 'dlDonald',
+    first_name: 'Aaron',
+    last_name: 'Donald',
+    position: 'DT',
+    search_rank: 510,
+    active: true,
+  },
+  lbWarner: {
+    player_id: 'lbWarner',
+    first_name: 'Fred',
+    last_name: 'Warner',
+    position: 'LB',
+    search_rank: 520,
+    active: true,
+  },
+  lbSmith: {
+    player_id: 'lbSmith',
+    first_name: 'Roquan',
+    last_name: 'Smith',
+    position: 'ILB',
+    search_rank: 530,
+    active: true,
+  },
+  dbGardner: {
+    player_id: 'dbGardner',
+    first_name: 'Sauce',
+    last_name: 'Gardner',
+    position: 'CB',
+    search_rank: 540,
+    active: true,
+  },
+  // Position resolvable only via fantasy_positions.
+  dbJames: {
+    player_id: 'dbJames',
+    first_name: 'Derwin',
+    last_name: 'James',
+    position: null,
+    fantasy_positions: ['DB'],
+    search_rank: 550,
+    active: true,
+  },
+
+  // Excluded: inactive, retired, and an undraftable position — all must vanish.
+  inactiveWR: {
+    player_id: 'inactiveWR',
+    first_name: 'Retired',
+    last_name: 'Star',
+    position: 'WR',
+    search_rank: 1,
+    active: false,
+  },
+  retiredRB: {
+    player_id: 'retiredRB',
+    first_name: 'Gone',
+    last_name: 'Fishing',
+    position: 'RB',
+    status: 'Retired',
+    search_rank: 4,
+    active: true,
+  },
+  punter1: {
+    player_id: 'punter1',
+    first_name: 'Punt',
+    last_name: 'Guy',
+    position: 'P',
+    search_rank: 250,
+    active: true,
+  },
+};
