@@ -1,0 +1,13 @@
+{
+  "name": "@opendraft/infra-build",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reproducible esbuild bundling of the services/api Lambda handlers into Lambda-ready ESM zips. Isolated from the pnpm workspace on purpose (see infra/README.md).",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1"
+  }
+}

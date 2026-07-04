@@ -1,0 +1,35 @@
+# Copy to terraform.tfvars (gitignored via *.auto.tfvars pattern — or name it
+# something.auto.tfvars) and edit. All values shown are the defaults.
+
+env       = "dev"
+region    = "us-east-1"
+league_id = "opendraft"
+
+# Optional overrides (empty = derived names).
+# table_name       = ""
+# pool_bucket_name = ""   # default: opendraft-<env>-pool-<account_id>
+# web_bucket_name  = ""   # default: opendraft-<env>-web-<account_id>
+# pool_prefix      = "pools/"
+
+# DynamoDB point-in-time recovery (off = cheapest; on for a real draft if wanted).
+# enable_pitr = false
+
+# Lambda sizing / logs.
+# lambda_memory_mb   = 256
+# log_retention_days = 14
+
+# --- Custom domain (optional) ---
+# Leave empty to use the default *.cloudfront.net domain.
+# domain_name         = "draft.example.com"
+# acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxx"  # MUST be us-east-1
+
+# --- Secrets ---
+# Prefer setting these OUT-OF-BAND after apply (see README). If you do set them
+# here, name the file *.auto.tfvars so it is gitignored, and never commit it.
+# admin_passcode_hash = "$2a$12$....bcrypt...."
+# session_hmac_key    = "base64-or-hex-32-bytes"
+
+# --- Auth tunables ---
+# session_ttl_sec   = 3600
+# auth_max_attempts = 5
+# auth_window_sec   = 900

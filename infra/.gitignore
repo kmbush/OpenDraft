@@ -1,0 +1,13 @@
+# Terraform
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — commit it so provider
+# versions are reproducible across machines.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.auto.tfvars
+override.tf
+override.tf.json
+
+# Lambda artifacts produced by archive_file
+modules/lambda/.artifacts/
