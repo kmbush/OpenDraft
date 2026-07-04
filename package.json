@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "concurrently -k -n harness,web \"pnpm --filter @opendraft/dev-server start\" \"pnpm --filter @opendraft/web dev\"",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "check": "biome check .",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "concurrently": "9.1.0",
     "typescript": "5.6.3",
     "vitest": "2.1.8"
   }

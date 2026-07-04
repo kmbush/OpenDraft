@@ -701,6 +701,16 @@ possible warm tier (revisit AD-1).
   or local DynamoDB, so the actual transaction/condition semantics are unproven. *Mitigation:* before the
   first real draft, exercise `DynamoPersistence` against DynamoDB Local (or a scratch table) — especially the
   concurrent stale-version race and append/undo/edit deltas.
+- **R-8 Pool base-URL wiring (PRE-DEPLOY).** `apps/web` fetches the pool by path; the local harness serves it
+  at `/pool/<snapshotId>.json` (Vite proxy) while infra serves it via CloudFront at `/pools/<snapshotId>.json`
+  (plural). Reconcile before deploy — make the web app's pool base-URL configurable and point it at the
+  CloudFront `/pools/` path (or drive it off the `GET …/pool` route's returned URL).
+- **R-9 Admin setup-action race (low severity).** `SET_ORDER`/`START` (and other admin state transitions)
+  carry no `expectedVersion`, and API Gateway+Lambda doesn't serialize per connection, so a *rapid
+  programmatic* admin sequence could hit a spurious `REJECT` (the version-guarded commit prevents any actual
+  corruption — worst case is a retry). Real UI clicks are sequential, so it's a non-issue in practice.
+  *Optional hardening:* let admin transition events carry `expectedVersion`, or document setup actions as
+  sequential.
 - **R-6 Retired players survive the pool filter (FOLLOW-UP).** Sleeper keeps retired stars (e.g. Tom Brady,
   Drew Brees) with a strong `search_rank` and without an `active:false`/`Retired` flag, so the current
   `isPlaying` status filter lets them into the pool — affecting both the bundled fallback and the daily live

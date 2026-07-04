@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* Theme tokens (AD-10): set as CSS custom properties at load; components read
+   these, never hard-coded brand values (CONVENTIONS §4.7). */
+:root {
+  --color-primary: #2563eb;
+  --color-secondary: #0f172a;
+  --color-accent: #f59e0b;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: var(--color-secondary);
+}
+
+.nav {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-secondary);
+}
+.nav a {
+  color: white;
+  text-decoration: none;
+}
+
+main {
+  padding: 1rem;
+}
+
+.banner {
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.reject {
+  color: #b91c1c;
+}
+.muted {
+  color: #64748b;
+}
+
+.pos-group h3 {
+  margin: 0.75rem 0 0.25rem;
+}
+.pos-group ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.pos-group li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.15rem 0;
+}
+
+.board .clock {
+  font-size: 3rem;
+  font-weight: 700;
+}
+.pick-in h1 {
+  font-size: 2.5rem;
+}
+
+.setup label,
+.controls fieldset {
+  display: block;
+  margin: 0.4rem 0;
+}
+.buttons button,
+.controls button {
+  margin-right: 0.5rem;
+}
