@@ -126,6 +126,12 @@ export interface DraftState {
   pendingPick?: Pick;
   /** Remaining clock in ms captured on PAUSE, re-applied on RESUME. */
   pausedRemainingMs?: number;
+  /**
+   * Which S3 pool snapshot this draft draws from (DESIGN §4). Persistent draft
+   * config, not runtime — the pure engine never reads it; the authority uses it
+   * to resolve the `available` list for auto-pick.
+   */
+  poolSnapshotId?: string;
   /** Optimistic-concurrency token; the engine owns bumping it (DESIGN §4, §5.4). */
   version: number;
 }

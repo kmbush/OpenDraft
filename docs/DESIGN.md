@@ -696,3 +696,14 @@ possible warm tier (revisit AD-1).
 - **R-4 Clock skew across devices.** *Mitigation:* `serverNow` offset handshake in every `SYNC` (§5.5).
 - **R-5 Venue total-wifi-loss.** Flaky is handled; a *full* outage stalls the draft. *Mitigation
   (Phase 3+):* optional LAN-offline mode — flagged, not built (Open Q #8).
+- **R-7 Transactional commit not integration-tested (PRE-DEPLOY).** The DynamoDB `commit` (version-guarded
+  `TransactWriteCommand` + single PICK delta) is unit-tested against in-memory fakes but not against a real
+  or local DynamoDB, so the actual transaction/condition semantics are unproven. *Mitigation:* before the
+  first real draft, exercise `DynamoPersistence` against DynamoDB Local (or a scratch table) — especially the
+  concurrent stale-version race and append/undo/edit deltas.
+- **R-6 Retired players survive the pool filter (FOLLOW-UP).** Sleeper keeps retired stars (e.g. Tom Brady,
+  Drew Brees) with a strong `search_rank` and without an `active:false`/`Retired` flag, so the current
+  `isPlaying` status filter lets them into the pool — affecting both the bundled fallback and the daily live
+  refresh. *Decision (Kyle, 2026-07-04):* accept for now, honest to Sleeper's fields. *Deferred fix:* tighten
+  the filter — e.g. also require a current `team` (removes retired players; trade-off is dropping genuinely
+  unsigned FAs, self-correcting via the daily refresh). Owner: revisit before a real draft.

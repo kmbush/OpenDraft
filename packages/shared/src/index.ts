@@ -3,4 +3,5 @@ export * from './domain.js';
 export * from './events.js';
 export * from './messages.js';
 export * from './pool.js';
+export * from './league.js';
 export * from './constants.js';

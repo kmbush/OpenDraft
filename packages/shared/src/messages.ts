@@ -29,7 +29,11 @@ export type RejectCode =
   | 'OUT_OF_RANGE'
   | 'NOTHING_TO_UNDO'
   | 'NO_LEGAL_PLAYERS'
-  | 'RNG_REQUIRED';
+  | 'RNG_REQUIRED'
+  // Transport/auth rejects owned by the handler layer (not the engine).
+  | 'UNAUTHORIZED'
+  | 'BAD_REQUEST'
+  | 'NOT_FOUND';
 
 /**
  * A pick was applied (manual or auto). Carries the completed pick for the
