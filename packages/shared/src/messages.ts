@@ -1,0 +1,74 @@
+/**
+ * Outbound message contracts (the engine's `outbox`) and the shared WS envelope.
+ *
+ * All wire messages use the envelope `{ type, draftId, payload, version? }`
+ * (CONVENTIONS §4.4). `type` values are UPPER_SNAKE literals. These are imported
+ * by both the Lambda authority and the browser client — never hand-duplicated.
+ */
+import type { DraftState, Pick } from './domain.js';
+
+/** Generic WS envelope. */
+export interface Envelope<TType extends string, TPayload> {
+  type: TType;
+  draftId: string;
+  payload: TPayload;
+  /** State version at emit time; used for optimistic concurrency / ordering. */
+  version?: number;
+}
+
+/** Typed reasons an event can be rejected (CONVENTIONS §4.5). */
+export type RejectCode =
+  | 'NOT_ON_CLOCK'
+  | 'WRONG_TEAM'
+  | 'PLAYER_TAKEN'
+  | 'STALE_VERSION'
+  | 'BAD_STATE'
+  | 'ORDER_LOCKED'
+  | 'INVALID_ORDER'
+  | 'PICK_NOT_FOUND'
+  | 'OUT_OF_RANGE'
+  | 'NOTHING_TO_UNDO'
+  | 'NO_LEGAL_PLAYERS'
+  | 'RNG_REQUIRED';
+
+/**
+ * A pick was applied (manual or auto). Carries the completed pick for the
+ * "the pick is in" announcement AND the next team's deadline, so a single
+ * broadcast covers the whole waiting-period transition (DESIGN §5.2).
+ * `nextTeamSlot`/`nextPickDeadline` are null on the final pick.
+ */
+export type PickMade = Envelope<
+  'PICK_MADE',
+  {
+    pick: Pick;
+    nextTeamSlot: number | null;
+    nextPickDeadline: number | null;
+  }
+>;
+
+/** An event was refused; state is unchanged. */
+export type Reject = Envelope<
+  'REJECT',
+  {
+    code: RejectCode;
+    message: string;
+    currentVersion: number;
+  }
+>;
+
+/**
+ * Full authoritative snapshot (DESIGN §5.5). Emitted on every admin/state
+ * transition and on reconnect; the client rebuilds its UI wholesale.
+ * `serverNow` anchors the clock-offset handshake.
+ */
+export type Sync = Envelope<
+  'SYNC',
+  {
+    state: DraftState;
+    serverNow: number;
+  }
+>;
+
+export type OutboundMessage = PickMade | Reject | Sync;
+
+export type OutboundType = OutboundMessage['type'];

@@ -372,10 +372,16 @@ schema change to the pick log is needed. MVP simply never populates it.
 pre-sorted). The draft references `poolSnapshotId`; clients fetch it once via CloudFront and cache in
 IndexedDB. Rationale: ~5 MB of mostly-static data has no business in the transactional hot path.
 
-**Concurrency & ordering.** The Draft item carries a monotonic **`version`** (= picks applied). Every pick
-is a **conditional write** `ConditionExpression: version = :expected`. Concurrent or duplicate submits fail
-the condition and are rejected — serializable pick application with **no lock service**. The pick log is
-append-only; the board is derived by range-querying `DRAFT#<id>#PICK#`.
+**Concurrency & ordering.** The Draft item carries a **`version`** that is a **monotonically increasing
+mutation counter** — bumped by **+1 on every state-mutating event, including admin `UNDO`/`EDIT_PICK`**. It is
+deliberately **not** "picks applied" (picks-applied is derivable from the pick log / pointer). **`version`
+only ever moves forward — `UNDO` increments it, it never decrements.** This matters: undo returns a player to
+the pool, so a monotonic token is what prevents a delayed/duplicate submit carrying a stale `expectedVersion`
+from re-matching and silently re-drafting the just-undone player (an ABA hazard the `PLAYER_TAKEN` check
+can't catch once the player is available again). Every pick/admin mutation is a **conditional write**
+`ConditionExpression: version = :expected`; concurrent or duplicate submits fail the condition and are
+rejected — serializable application with **no lock service**. The pick log is append-only; the board is
+derived by range-querying `DRAFT#<id>#PICK#`.
 
 ### Core access patterns (all key-based, no scans)
 
@@ -437,9 +443,10 @@ Single-sourced in `services/engine`; used by both server (authority) and client 
 
 A **robust admin console ships in MVP** (Kyle's call), not just a single undo:
 - **UNDO (multi-step)** — roll back the last *N* picks. Each undo pops the latest pick (conditional on
-  current `version`), decrements the pointer, returns the player to the pool, and re-arms the correct team's
-  clock. Because picks are an append-only log, undo is just "delete the tail item and decrement `version`,"
-  repeatable back to any point.
+  current `version`), **decrements the pointer**, returns the player to the pool, and re-arms the correct
+  team's clock. Because picks are an append-only log, undo is "delete the tail item, rewind the pointer,"
+  repeatable back to any point. **`version` still increments** (it is a forward-only concurrency token, not a
+  pick count — see §4): the pointer rewinds but the token never does.
 - **EDIT_PICK / correction** — replace the player on any specific past pick without disturbing draft order.
 - **SET_ON_CLOCK / jump** — manually move the pointer to any team/slot (recover from mistakes, skip a no-show).
 - **PAUSE / RESUME** — freeze/rearm the clock (store remaining ms on pause).
@@ -458,6 +465,18 @@ incremental replay to get wrong, because state is small and re-sent whole. A clo
 (`serverNow` in the snapshot) keeps every countdown aligned.
 
 ---
+
+### 5.6 Engine event interface (confirmed, Phase 0)
+
+The engine is pure (no pool I/O), so the two events that need player data carry it in their payload; the
+handler populates it from the cached pool:
+- **`SUBMIT_PICK`** carries `{ teamSlot, playerId, position, expectedVersion? }` — `position` lets the engine
+  maintain per-team roster-by-position counts without a lookup.
+- **`TIMER_EXPIRE`** carries `{ available: PlayerRef[], expectedVersion? }` where `PlayerRef = { id, position }`
+  is the current pool **minus taken players**; the engine applies the AD-11 legality filter + seeded random
+  choice over it.
+- Each **`Pick`** persists `position`, so roster counts (and thus undo/edit correctness) derive from the
+  append-only log alone.
 
 ## 6. Data Flow
 
