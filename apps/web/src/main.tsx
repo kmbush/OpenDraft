@@ -1,20 +1,20 @@
 /**
- * App bootstrap: apply the theme, resolve the current draft + connection role
- * from the URL/localStorage, open the WS connection, and mount.
+ * App bootstrap: resolve the current draft + connection role from the
+ * URL/localStorage, open the WS connection, and mount. The league theme is
+ * applied in <App/> once the league metadata loads (AD-10).
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import './index.css';
-import { applyTheme } from './lib/theme.js';
 import { connect } from './net.js';
 import { useLiveStore } from './store/store.js';
 
-applyTheme();
-
 function roleForPath(): 'station' | 'board' | 'admin' {
-  if (location.pathname.startsWith('/board')) return 'board';
+  // /export is a read-only recap board — connect as a passive board viewer.
+  if (location.pathname.startsWith('/board') || location.pathname.startsWith('/export'))
+    return 'board';
   if (location.pathname.startsWith('/admin')) return 'admin';
   return 'station';
 }

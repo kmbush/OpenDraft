@@ -33,3 +33,20 @@ export function positionRank(position: Position): number {
   const idx = POSITION_ORDER.indexOf(position);
   return idx === -1 ? POSITION_ORDER.length : idx;
 }
+
+/**
+ * Broadcast position color-coding for badges (board §7). Hex so callers can
+ * derive tinted fills/borders (e.g. `${c}22`) inline — NOT a value/ranking
+ * signal, purely a category cue. Offense reads warm→cool, IDP in teal/cyan.
+ */
+export const POSITION_COLOR: Readonly<Record<Position, string>> = {
+  QB: '#ef4444', // red
+  RB: '#22c55e', // green
+  WR: '#3b82f6', // blue
+  TE: '#f97316', // orange
+  K: '#a855f7', // purple
+  DEF: '#64748b', // slate
+  DL: '#14b8a6', // teal
+  LB: '#22d3ee', // cyan
+  DB: '#38bdf8', // sky/cyan
+};

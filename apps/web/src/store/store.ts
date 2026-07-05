@@ -38,6 +38,12 @@ export const useLiveStore = create<StoreState>((set, get) => ({
   setConnected: (connected) => set({ connected }),
 
   handleInbound: (message, clientNow = Date.now()) => {
+    // Only apply messages for the draft this client is watching. The server
+    // fans out to every league connection, so a different (e.g. abandoned)
+    // draft's timer-fired auto-pick can arrive here — ignore it, or it would
+    // bleed picks into the wrong board.
+    const activeDraftId = get().draftId;
+    if (activeDraftId && message.draftId && message.draftId !== activeDraftId) return;
     set((state) => applyInbound(state, message, clientNow));
   },
 

@@ -26,27 +26,46 @@ async function loadPool(snapshotId: string): Promise<PoolSnapshot> {
   return snapshot;
 }
 
-/** Returns the pool players for a snapshot (empty until loaded). */
-export function usePool(snapshotId: string | undefined): Player[] {
-  const [players, setPlayers] = useState<Player[]>([]);
+/** Load lifecycle for the pool, so views can show real states (§4.5). */
+export type PoolStatus = 'none' | 'loading' | 'ready' | 'error';
+
+export interface PoolState {
+  players: Player[];
+  status: PoolStatus;
+}
+
+/**
+ * Loads the pool for a snapshot and reports its lifecycle: `none` (no snapshot
+ * configured), `loading`, `ready`, or `error`. Views render the matching state
+ * instead of a silent blank screen.
+ */
+export function usePool(snapshotId: string | undefined): PoolState {
+  const [state, setState] = useState<PoolState>({ players: [], status: 'none' });
   useEffect(() => {
     if (!snapshotId) {
-      setPlayers([]);
+      setState({ players: [], status: 'none' });
       return;
     }
     let active = true;
+    setState({ players: [], status: 'loading' });
     loadPool(snapshotId)
       .then((snapshot) => {
-        if (active) setPlayers(snapshot.players);
+        if (active) setState({ players: snapshot.players, status: 'ready' });
       })
       .catch(() => {
-        if (active) setPlayers([]);
+        if (active) setState({ players: [], status: 'error' });
       });
     return () => {
       active = false;
     };
   }, [snapshotId]);
-  return players;
+  return state;
+}
+
+/** Load a pool and report how many players it holds (for setup confirmation). */
+export async function fetchPoolCount(snapshotId: string): Promise<number> {
+  const snapshot = await loadPool(snapshotId);
+  return snapshot.players.length;
 }
 
 /** Player lookup by id, for rendering rosters from the pick log. */

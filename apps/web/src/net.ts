@@ -7,6 +7,9 @@ import type { OutboundMessage } from '@opendraft/shared';
 import { useLiveStore } from './store/store.js';
 
 const HTTP_BASE = '/api';
+
+/** The self-hosted league id (single-league today; multi-tenant-ready — §MEMORY). */
+export const LEAGUE_ID = 'dev-league';
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 let socket: WebSocket | null = null;

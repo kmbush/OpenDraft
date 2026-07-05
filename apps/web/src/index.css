@@ -1,76 +1,228 @@
 @import "tailwindcss";
 
-/* Theme tokens (AD-10): set as CSS custom properties at load; components read
-   these, never hard-coded brand values (CONVENTIONS §4.7). */
-:root {
+/*
+ * Semantic design tokens (shadcn-style) exposed to Tailwind v4 via @theme, so
+ * utilities like `bg-primary`, `text-muted-foreground`, `bg-card` and `border`
+ * resolve to these CSS variables. The three per-league brand tokens
+ * (--color-primary / --color-secondary / --color-accent) double as AD-10
+ * theming: lib/theme.ts overrides them at load from the league's Theme, so
+ * re-coloring is data, never a rebuild (CONVENTIONS §4.7).
+ */
+@theme {
+  --color-background: #f8fafc;
+  --color-foreground: #0f172a;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #94a3b8;
+
   --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+
   --color-secondary: #0f172a;
+  --color-secondary-foreground: #f8fafc;
+
   --color-accent: #f59e0b;
+  --color-accent-foreground: #0f172a;
+
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+
+  --animate-pick-in: pick-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-rise: rise 0.35s ease-out;
+
+  /* Board (§7) broadcast motion. */
+  --animate-takeover: takeover 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-reveal: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-confetti: confetti-fall 2.8s cubic-bezier(0.3, 0.6, 0.7, 1) forwards;
+  --animate-clock-pulse: clock-pulse 0.9s ease-in-out infinite;
+  --animate-slide-in: slide-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-breathe: breathe 3.5s ease-in-out infinite;
+
+  /* The Reveal: an envelope flipping open to show the team. */
+  --animate-envelope-open: envelope-open 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  color: var(--color-secondary);
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    margin: 0;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
-.nav {
-  display: flex;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-secondary);
-}
-.nav a {
-  color: white;
-  text-decoration: none;
-}
-
-main {
-  padding: 1rem;
-}
-
-.banner {
-  color: white;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 1.25rem;
+@keyframes pick-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(12px);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-.reject {
-  color: #b91c1c;
-}
-.muted {
-  color: #64748b;
-}
-
-.pos-group h3 {
-  margin: 0.75rem 0 0.25rem;
-}
-.pos-group ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.pos-group li {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.15rem 0;
+@keyframes rise {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.board .clock {
-  font-size: 3rem;
-  font-weight: 700;
-}
-.pick-in h1 {
-  font-size: 2.5rem;
+/* "THE PICK IS IN" takeover: a confident overshoot punch. */
+@keyframes takeover {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+    letter-spacing: 0.6em;
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    letter-spacing: 0.15em;
+  }
 }
 
-.setup label,
-.controls fieldset {
-  display: block;
-  margin: 0.4rem 0;
+/* Pick reveal: rise + settle. */
+@keyframes reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
-.buttons button,
-.controls button {
-  margin-right: 0.5rem;
+
+/* Light sweep across a gradient-clipped headline. */
+@keyframes shimmer {
+  0% {
+    background-position: -150% 0;
+  }
+  100% {
+    background-position: 250% 0;
+  }
+}
+
+/* Confetti fall — one piece; callers randomize offsets via inline style. */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-10vh) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(105vh) rotate(720deg);
+  }
+}
+
+/* Urgent clock: glow + heartbeat under ~10s. */
+@keyframes clock-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.5));
+  }
+  50% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 30px rgba(239, 68, 68, 0.85));
+  }
+}
+
+/* Recent-pick enters from the right. */
+@keyframes slide-in {
+  0% {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* An envelope bursting open: a 3D flip down + a confident overshoot. */
+@keyframes envelope-open {
+  0% {
+    opacity: 0;
+    transform: perspective(800px) rotateX(-85deg) scale(0.9);
+  }
+  55% {
+    opacity: 1;
+    transform: perspective(800px) rotateX(10deg) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(800px) rotateX(0deg) scale(1);
+  }
+}
+
+/* Ambient breathing glow behind the hero. */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+/*
+ * /export print styling (AD-9). The recap board is already in the DOM with the
+ * league theme; printing just hides the app chrome and lays it out on a light,
+ * landscape page. `.print-exact` keeps position/team colors from being dropped by
+ * the browser's ink-saving default; break-inside:avoid keeps rows/cells whole.
+ */
+.print-exact {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 0.4in;
+  }
+  html,
+  body {
+    background: #ffffff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-board {
+    font-size: 9px;
+  }
+  .print-board tr,
+  .print-board td,
+  .print-board th {
+    break-inside: avoid;
+  }
 }

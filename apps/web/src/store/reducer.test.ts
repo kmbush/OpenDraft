@@ -13,6 +13,7 @@ function draftFixture(): DraftState {
       mode: 'linear',
       timerSec: 90,
       waitingSec: 8,
+      goLiveCountdownSec: 0,
       rosterFormat: { starters: {}, flex: [], bench: 0, positionMax: {} },
     },
     teams: [
