@@ -51,6 +51,15 @@ export interface RevealDoneEvent {
   type: 'REVEAL_DONE';
 }
 
+/**
+ * End the "the pick is in" announcement lockout (PICK_IN → ON_CLOCK, next team on
+ * the clock with a fresh pick clock). Fired by the scheduler at `announceUntil`
+ * and by an admin "Skip announcement". No team can draft until it lands.
+ */
+export interface AnnounceDoneEvent {
+  type: 'ANNOUNCE_DONE';
+}
+
 /** Admin: begin the draft (ORDER_SET → STARTING, or straight to ON_CLOCK if no countdown). */
 export interface StartEvent {
   type: 'START';
@@ -138,6 +147,7 @@ export type DraftEvent =
   | TimerExpireEvent
   | StartRevealEvent
   | RevealDoneEvent
+  | AnnounceDoneEvent
   | StartEvent
   | GoLiveEvent
   | PauseEvent

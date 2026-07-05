@@ -405,7 +405,7 @@ stateDiagram-v2
     ORDER_SET --> ON_CLOCK: admin START
     ON_CLOCK --> PICK_IN: SUBMIT_PICK(team, player)
     ON_CLOCK --> PICK_IN: TIMER_EXPIRE / auto-pick(random legal)
-    PICK_IN --> ON_CLOCK: waiting period elapses (next team)
+    PICK_IN --> ON_CLOCK: ANNOUNCE_DONE (lockout ends, next team)
     PICK_IN --> COMPLETE: last pick made
     ON_CLOCK --> PAUSED: admin PAUSE
     PAUSED --> ON_CLOCK: admin RESUME
@@ -419,18 +419,23 @@ stateDiagram-v2
 - **`ON_CLOCK`** — a team is on the clock; `pickDeadline` timestamp is set and broadcast. A one-shot
   EventBridge schedule is armed at `pickDeadline`; if it fires first, a `TIMER_EXPIRE` event auto-picks a
   random legal player (AD-11) and transitions to `PICK_IN` exactly as a manual pick would.
-- **`PICK_IN`** — a pick was just submitted; drives the "the pick is in" animation and the **waiting
-  period** before the next team goes live.
+- **`PICK_IN`** — the **hard, server-enforced announcement lockout** after a pick: the pointer has advanced
+  to the next team but there is **no pick clock** and **every `SUBMIT_PICK` is rejected (`ANNOUNCING`)** —
+  nobody can draft. `announceUntil = now + waitingSec` bounds it; a one-shot schedule armed at it fires
+  `ANNOUNCE_DONE`. The board plays "the pick is in → the pick announced → on the clock: <next team>" across
+  the window.
 - **`PAUSED`** — admin-held; the clock is frozen (deadline recomputed on resume).
 - **`COMPLETE`** — all `rounds × teams` picks made; board view + export available.
 
-### 5.2 The single-message pick + waiting-period trick
+### 5.2 The pick broadcast + the locked announcement window
 
-On `SUBMIT_PICK`, the authority emits **one** broadcast that carries *both* the just-completed pick (for the
-announcement) **and** the next team's `pickDeadline = now + waitingSec + timerSec`. Clients play the
-"pick is in" animation during the waiting window, then the countdown begins at the deadline. No second
-server round-trip; a client that refreshes mid-waiting-period recovers the pending announcement and the
-deadline from the state snapshot.
+On `SUBMIT_PICK` (or auto-pick), the authority emits **one** `PICK_MADE` broadcast carrying the completed
+pick, the next team, and `announceUntil = now + waitingSec`, and enters the `PICK_IN` lockout — **no pick
+clock, all picks rejected**. A one-shot schedule armed at `announceUntil` fires `ANNOUNCE_DONE`, which flips
+`PICK_IN → ON_CLOCK`, sets the next team's `pickDeadline = now + timerSec`, and broadcasts the fresh clock
+via `SYNC`. Only then can the next team draft. A client that refreshes mid-window recovers the pending
+announcement and `announceUntil` from the state snapshot; the last pick skips the lockout and goes straight
+to `COMPLETE`.
 
 ### 5.3 Ordering (snake / linear)
 
@@ -711,9 +716,7 @@ possible warm tier (revisit AD-1).
   corruption — worst case is a retry). Real UI clicks are sequential, so it's a non-issue in practice.
   *Optional hardening:* let admin transition events carry `expectedVersion`, or document setup actions as
   sequential.
-- **R-6 Retired players survive the pool filter (FOLLOW-UP).** Sleeper keeps retired stars (e.g. Tom Brady,
-  Drew Brees) with a strong `search_rank` and without an `active:false`/`Retired` flag, so the current
-  `isPlaying` status filter lets them into the pool — affecting both the bundled fallback and the daily live
-  refresh. *Decision (Kyle, 2026-07-04):* accept for now, honest to Sleeper's fields. *Deferred fix:* tighten
-  the filter — e.g. also require a current `team` (removes retired players; trade-off is dropping genuinely
-  unsigned FAs, self-correcting via the daily refresh). Owner: revisit before a real draft.
+- **R-6 Retired players in the pool — RESOLVED (2026-07-04).** The snapshot builder now **requires a current
+  NFL `team`** (`build.ts`: `if (!team) continue;`), dropping retired stars (Tom Brady, Drew Brees) and
+  unsigned free agents. Team defenses and active players always carry a team, so nothing draftable is lost;
+  the regenerated bundled snapshot verified 0 team-less players and still fills every position cap (444).

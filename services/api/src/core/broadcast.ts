@@ -19,20 +19,23 @@ export async function fanOut(deps: Deps, message: OutboundMessage): Promise<void
 
 /**
  * Arm or cancel the one-shot timer to match the new state. It fires at the reveal
- * end in REVEALING (→ REVEAL_DONE), at `liveAt` in STARTING (→ GO_LIVE), and at
- * `pickDeadline` in ON_CLOCK/PICK_IN (→ auto-pick); every other state cancels.
- * Armed with `state.version` so a stale fire (after a pick, "Go now", or "Skip to
- * result" advanced the version) becomes a no-op (AD-1, AD-11).
+ * end in REVEALING (→ REVEAL_DONE), at `liveAt` in STARTING (→ GO_LIVE), at
+ * `announceUntil` in PICK_IN (→ ANNOUNCE_DONE, the lockout end), and at
+ * `pickDeadline` in ON_CLOCK (→ auto-pick); every other state cancels. Armed with
+ * `state.version` so a stale fire (after a pick, "Go now", or "Skip to result"
+ * advanced the version) becomes a no-op (AD-1, AD-11).
  */
 export async function reconcileScheduler(deps: Deps, state: DraftState): Promise<void> {
-  const live = state.status === 'ON_CLOCK' || state.status === 'PICK_IN';
-  const revealEnd =
+  const fireAt =
     state.status === 'REVEALING' && state.reveal
       ? state.reveal.revealAt + revealAnimationMs(state.settings.teams)
-      : undefined;
-  const fireAt =
-    revealEnd ??
-    (state.status === 'STARTING' ? state.liveAt : live ? state.pickDeadline : undefined);
+      : state.status === 'STARTING'
+        ? state.liveAt
+        : state.status === 'PICK_IN'
+          ? state.announceUntil
+          : state.status === 'ON_CLOCK'
+            ? state.pickDeadline
+            : undefined;
   if (typeof fireAt === 'number') {
     await deps.scheduler.arm({ draftId: state.draftId, version: state.version, fireAt });
   } else {

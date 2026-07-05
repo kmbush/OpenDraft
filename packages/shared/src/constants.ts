@@ -13,7 +13,7 @@ export const OFFENSE_POSITIONS: readonly Position[] = ['QB', 'RB', 'WR', 'TE', '
 export const IDP_POSITIONS: readonly Position[] = ['DL', 'LB', 'DB'];
 
 export const DEFAULT_TIMER_SEC = 90;
-export const DEFAULT_WAITING_SEC = 8;
+export const DEFAULT_WAITING_SEC = 10;
 
 /**
  * A sensible standard-redraft roster preset (1QB, 2RB, 2WR, 1TE, 1FLEX, K, DEF,

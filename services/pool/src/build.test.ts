@@ -1,6 +1,7 @@
 import type { Player, PoolSnapshot, Position } from '@opendraft/shared';
 import { describe, expect, it } from 'vitest';
 import { buildSnapshot } from './build.js';
+import { TEAM_BYE, byeForTeam } from './byes.js';
 import type { SnapshotConfig } from './config.js';
 import { SLEEPER_FIXTURE } from './fixtures.js';
 
@@ -12,7 +13,11 @@ const CONFIG: SnapshotConfig = {
 /** Same grouping order the builder emits; used to verify the sort independently. */
 const POSITION_ORDER: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
 
-/** Every ranking/ADP-ish or non-Player field that must NEVER reach a client (AD-6). */
+/**
+ * Every ranking/ADP-ish or non-Player field that must NEVER reach a client
+ * (AD-6). `team`/`bye` are deliberately ABSENT — they are factual identity /
+ * schedule data, not a value signal, and are allowed on `Player`.
+ */
 const BANNED_FIELDS = [
   'search_rank',
   'depth_chart_order',
@@ -23,8 +28,10 @@ const BANNED_FIELDS = [
   'active',
   'status',
   'full_name',
-  'team',
 ];
+
+/** Keys a served `Player` may carry — nothing outside this set may leak (AD-6). */
+const ALLOWED_KEYS = ['bye', 'firstName', 'id', 'lastName', 'position', 'team'];
 
 function build(): PoolSnapshot {
   return buildSnapshot(SLEEPER_FIXTURE, CONFIG);
@@ -42,9 +49,11 @@ describe('ordering invariant (CONVENTIONS §5, AD-6)', () => {
     }
   });
 
-  it('each player object has exactly id/firstName/lastName/position', () => {
+  it('each player object carries only allowed keys (id/name/position + team/bye)', () => {
     for (const player of build().players) {
-      expect(Object.keys(player).sort()).toEqual(['firstName', 'id', 'lastName', 'position']);
+      for (const key of Object.keys(player)) {
+        expect(ALLOWED_KEYS).toContain(key);
+      }
     }
   });
 
@@ -67,12 +76,14 @@ describe('ordering invariant (CONVENTIONS §5, AD-6)', () => {
 });
 
 describe('schema normalization', () => {
-  it('maps id/name parts/position from a standard Sleeper record', () => {
+  it('maps id/name parts/position/team from a standard Sleeper record', () => {
     expect(byId(build(), 'qbMahomes')).toEqual({
       id: 'qbMahomes',
       firstName: 'Patrick',
       lastName: 'Mahomes',
       position: 'QB',
+      team: 'KC',
+      bye: 10,
     });
   });
 
@@ -133,6 +144,41 @@ describe('position-aware top-N and filtering (AD-5)', () => {
     const s = build();
     expect(s.snapshotId).toBe('2026-07-03');
     expect(s.source).toBe('sleeper');
+  });
+});
+
+describe('team + bye attachment (factual, allowed under AD-6)', () => {
+  it('carries the NFL team abbr from Sleeper onto the player', () => {
+    expect(byId(build(), 'wrJefferson')?.team).toBe('MIN');
+    expect(byId(build(), 'wrChase')?.team).toBe('CIN');
+  });
+
+  it('attaches the bye week for the player’s team from TEAM_BYE', () => {
+    expect(byId(build(), 'wrJefferson')?.bye).toBe(6); // MIN
+    expect(byId(build(), 'wrChase')?.bye).toBe(10); // CIN
+  });
+
+  it('drops a player with no current team — even a top-ranked one', () => {
+    const s = build();
+    // faTopWR is active and rank 0 (the best), but has no NFL team → excluded.
+    expect(byId(s, 'faTopWR')).toBeUndefined();
+    // the teamed WRs fill the cap in its place (no team-less player displaces them).
+    expect(byId(s, 'wrJefferson')).toBeDefined();
+    expect(byId(s, 'wrChase')).toBeDefined();
+  });
+});
+
+describe('byeForTeam', () => {
+  it('resolves a known team to its bye week', () => {
+    expect(byeForTeam('BUF')).toBe(TEAM_BYE.BUF);
+    expect(byeForTeam('KC')).toBe(10);
+  });
+
+  it('returns undefined for unknown, empty, or missing teams', () => {
+    expect(byeForTeam('ZZZ')).toBeUndefined();
+    expect(byeForTeam('')).toBeUndefined();
+    expect(byeForTeam(null)).toBeUndefined();
+    expect(byeForTeam(undefined)).toBeUndefined();
   });
 });
 

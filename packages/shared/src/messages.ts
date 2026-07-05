@@ -19,6 +19,7 @@ export interface Envelope<TType extends string, TPayload> {
 /** Typed reasons an event can be rejected (CONVENTIONS §4.5). */
 export type RejectCode =
   | 'NOT_ON_CLOCK'
+  | 'ANNOUNCING'
   | 'WRONG_TEAM'
   | 'PLAYER_TAKEN'
   | 'STALE_VERSION'
@@ -37,16 +38,17 @@ export type RejectCode =
 
 /**
  * A pick was applied (manual or auto). Carries the completed pick for the
- * "the pick is in" announcement AND the next team's deadline, so a single
- * broadcast covers the whole waiting-period transition (DESIGN §5.2).
- * `nextTeamSlot`/`nextPickDeadline` are null on the final pick.
+ * announcement AND the next team plus `announceUntil` (epoch ms the announcement
+ * lockout ends). During the lockout there is NO pick clock and every SUBMIT_PICK
+ * is rejected; the server flips PICK_IN → ON_CLOCK at `announceUntil`, which
+ * arms the fresh pick clock (DESIGN §5.2). Both fields are null on the final pick.
  */
 export type PickMade = Envelope<
   'PICK_MADE',
   {
     pick: Pick;
     nextTeamSlot: number | null;
-    nextPickDeadline: number | null;
+    announceUntil: number | null;
   }
 >;
 

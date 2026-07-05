@@ -22,9 +22,11 @@ export type FlexKind = 'FLEX' | 'SUPERFLEX' | 'IDP_FLEX';
  * no team is on the clock yet (see `liveAt`). `REVEALING` is the draft-order
  * reveal show ("The Reveal"): the order is already committed to state, but the
  * board unveils it via an animation while the admin console stays blind (see
- * `reveal`). `PICK_IN` is the transient "the pick is in" announcement window; a
- * team is still live on the clock during it (the next deadline is already set),
- * so picks are accepted in both `ON_CLOCK` and `PICK_IN`.
+ * `reveal`). `PICK_IN` is the hard, server-enforced announcement lockout after a
+ * pick: the pointer has advanced to the next team but there is NO pick clock yet
+ * and every `SUBMIT_PICK` is rejected until `announceUntil` elapses and the
+ * server transitions `PICK_IN -> ON_CLOCK` (ANNOUNCE_DONE). Only then can the
+ * next team draft. Picks are accepted only in `ON_CLOCK`.
  */
 export type DraftStatus =
   | 'SETUP'
@@ -45,13 +47,21 @@ export type RevealGame = 'envelopes';
 
 /**
  * A draftable player. Deliberately has NO ranking fields, ever (CONVENTIONS §5)
- * — name parts + position only. The served pool is sorted (position, last, first).
+ * — name parts + position, plus purely factual context. The served pool is
+ * sorted (position, last, first).
+ *
+ * `team` (NFL abbr, e.g. "BUF") and `bye` (week) are factual identity/schedule
+ * data, NOT a ranking/value signal, so they are allowed under AD-6.
  */
 export interface Player {
   id: string;
   firstName: string;
   lastName: string;
   position: Position;
+  /** NFL team abbreviation (e.g. "BUF", "GB"); absent for free agents / team DEFs without one. */
+  team?: string;
+  /** Bye week for the player's team this season; absent when unknown. */
+  bye?: number;
 }
 
 /**
@@ -103,6 +113,8 @@ export interface DraftSettings {
    * (the STARTING phase). `0` skips straight to the first pick clock.
    */
   goLiveCountdownSec: number;
+  /** Whether the station shows each player's bye week. Defaults to true. */
+  showByeWeeks?: boolean;
 }
 
 /** A drafting team. `slot` is the stable 1-based identity used by `order` and picks. */
@@ -162,6 +174,13 @@ export interface DraftState {
   reveal?: { game: RevealGame; revealAt: number };
   /** The just-made pick, surfaced during the PICK_IN announcement window. */
   pendingPick?: Pick;
+  /**
+   * Epoch ms the PICK_IN announcement lockout ends; set only in PICK_IN, cleared
+   * on ANNOUNCE_DONE. No pick clock runs during the lockout — the board drives
+   * the "pick is in -> announcement -> on the clock" sequence off it, and the
+   * server arms a one-shot schedule at it to flip PICK_IN -> ON_CLOCK (AD-1).
+   */
+  announceUntil?: number;
   /** Remaining clock in ms captured on PAUSE, re-applied on RESUME. */
   pausedRemainingMs?: number;
   /**

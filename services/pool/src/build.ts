@@ -4,13 +4,16 @@
  * `buildSnapshot(raw, config) => PoolSnapshot`. No I/O, no clock — deterministic
  * given its inputs, so it is exhaustively unit-testable against a fixture.
  *
- * Pipeline: normalize → drop non-playing → keep top-N per position by
- * `search_rank` → DISCARD rank → sort `(position, lastName, firstName)`.
+ * Pipeline: normalize → drop non-playing → drop team-less (retired/unsigned) →
+ * keep top-N per position by `search_rank` → DISCARD rank → sort
+ * `(position, lastName, firstName)`.
  * Rank is read only here to select/order the top-N and is never emitted (AD-6):
  * the output objects are plain `Player`s, so no ranking signal can exist in them
- * by construction.
+ * by construction. Team abbr + bye week ARE carried — they are factual identity /
+ * schedule data, not a value signal (AD-6).
  */
 import type { Player, PoolSnapshot, Position } from '@opendraft/shared';
+import { byeForTeam } from './byes.js';
 import type { SnapshotConfig } from './config.js';
 import {
   type SleeperPlayer,
@@ -63,7 +66,20 @@ export function buildSnapshot(raw: SleeperPlayerMap, config: SnapshotConfig): Po
     const id = sp.player_id ?? key;
     if (!id) continue;
     const { firstName, lastName } = normalizeName(sp);
-    const player: Player = { id, firstName, lastName, position };
+    const team = sp.team?.trim();
+    // Drop players with no current NFL team — retired players and unsigned free
+    // agents (Sleeper keeps them with a rank but no team). Team defenses and active
+    // players always carry a team, so this only removes the ones you'd never draft.
+    if (!team) continue;
+    const bye = byeForTeam(team);
+    const player: Player = {
+      id,
+      firstName,
+      lastName,
+      position,
+      team,
+      ...(bye !== undefined ? { bye } : {}),
+    };
     const rank = typeof sp.search_rank === 'number' ? sp.search_rank : Number.POSITIVE_INFINITY;
     const bucket = byPosition.get(position);
     if (bucket) bucket.push({ player, rank });

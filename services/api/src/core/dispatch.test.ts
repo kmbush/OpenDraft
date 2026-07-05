@@ -58,10 +58,21 @@ describe('rejections surface as REJECT to the sender only', () => {
   });
 
   it('already-taken player → REJECT PLAYER_TAKEN', async () => {
-    await submit(2, 1, 'dup'); // team 1 takes dup (version → 3)
-    await submit(3, 2, 'dup'); // team 2 tries the same player
+    const { token } = await issueSession(h.deps.secrets, 'L1', h.deps.env.now(), 3600);
+    await submit(2, 1, 'dup'); // team 1 takes dup → PICK_IN lockout (version → 3)
+    // End the announcement lockout so team 2 is actually on the clock (version → 4).
+    await dispatchAction(h.deps, 'c1', { type: 'ANNOUNCE_DONE', draftId: 'D1', token });
+    await submit(4, 2, 'dup'); // team 2 tries the same player
     const last = h.broadcaster.messagesTo('c1').at(-1);
     expect(last).toMatchObject({ type: 'REJECT', payload: { code: 'PLAYER_TAKEN' } });
+  });
+
+  it('a SUBMIT_PICK during the announcement lockout → REJECT ANNOUNCING', async () => {
+    await submit(2, 1, 'p1'); // team 1 picks → PICK_IN lockout (version → 3)
+    await submit(3, 2, 'p2'); // team 2 tries to jump the gun mid-announcement
+    const last = h.broadcaster.messagesTo('c1').at(-1);
+    expect(last).toMatchObject({ type: 'REJECT', payload: { code: 'ANNOUNCING' } });
+    expect((h.persistence.drafts.get('L1#D1') as DraftState).picks).toHaveLength(1);
   });
 
   it('a concurrent commit race → REJECT STALE_VERSION from the version guard', async () => {

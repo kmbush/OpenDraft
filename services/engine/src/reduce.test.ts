@@ -17,6 +17,16 @@ function submit(state: DraftState, ctx: ReduceContext, playerId: string, positio
   return reduce(state, { type: 'SUBMIT_PICK', teamSlot: slot, playerId, position }, ctx);
 }
 
+/**
+ * Land a pick AND clear the announcement lockout (PICK_IN → ON_CLOCK) so the next
+ * team is live — the way real fixtures advance now that picks are rejected during
+ * the lockout. Returns the resulting state (COMPLETE picks skip the lockout).
+ */
+function place(state: DraftState, ctx: ReduceContext, playerId: string, position: Position) {
+  const after = submit(state, ctx, playerId, position).state;
+  return after.status === 'PICK_IN' ? reduce(after, { type: 'ANNOUNCE_DONE' }, ctx).state : after;
+}
+
 const CTX: ReduceContext = { now: 1000, rng: seededRng(1) };
 
 describe('START', () => {
@@ -151,7 +161,7 @@ describe('GO_LIVE', () => {
   });
 });
 
-describe('SUBMIT_PICK + waiting-period deadline (DESIGN §5.2)', () => {
+describe('SUBMIT_PICK + announcement lockout (DESIGN §5.2)', () => {
   let started: DraftState;
   beforeEach(() => {
     started = reduce(
@@ -161,13 +171,14 @@ describe('SUBMIT_PICK + waiting-period deadline (DESIGN §5.2)', () => {
     ).state;
   });
 
-  it('applies a pick and arms the NEXT clock at now + (waitingSec + timerSec)', () => {
+  it('enters the PICK_IN lockout with announceUntil and NO pick clock', () => {
     const { state, outbox } = submit(started, { now: 2000 }, 'p1', 'RB');
     expect(state.status).toBe('PICK_IN');
     expect(state.pointer).toBe(2);
     expect(state.version).toBe(2);
     expect(state.pendingPick?.playerId).toBe('p1');
-    expect(state.pickDeadline).toBe(2000 + (8 + 90) * 1000);
+    expect(state.announceUntil).toBe(2000 + 8 * 1000); // waitingSec only
+    expect(state.pickDeadline).toBeUndefined(); // no clock during the lockout
 
     const msg = outbox[0];
     expect(msg?.type).toBe('PICK_MADE');
@@ -175,19 +186,43 @@ describe('SUBMIT_PICK + waiting-period deadline (DESIGN §5.2)', () => {
       payload: {
         pick: { overall: 1, teamSlot: 1, playerId: 'p1', auto: false },
         nextTeamSlot: 2,
-        nextPickDeadline: 2000 + 98 * 1000,
+        announceUntil: 2000 + 8 * 1000,
       },
     });
   });
 
-  it('accepts the next pick while in the PICK_IN window (next team is live)', () => {
-    const afterFirst = submit(started, { now: 2000 }, 'p1', 'RB').state;
-    const { state } = submit(afterFirst, { now: 3000 }, 'p2', 'WR');
-    expect(state.pointer).toBe(3);
-    expect(state.picks).toHaveLength(2);
+  it('rejects a SUBMIT_PICK during the PICK_IN lockout (nobody can draft)', () => {
+    const pickIn = submit(started, { now: 2000 }, 'p1', 'RB').state;
+    const { state, outbox } = submit(pickIn, { now: 3000 }, 'p2', 'WR');
+    expect(state).toBe(pickIn); // unchanged
+    expect(state.picks).toHaveLength(1);
+    expect(outbox[0]).toMatchObject({ type: 'REJECT', payload: { code: 'ANNOUNCING' } });
   });
 
-  it('transitions to COMPLETE on the final pick with no next clock', () => {
+  it('ANNOUNCE_DONE ends the lockout: PICK_IN → ON_CLOCK with a fresh pick clock', () => {
+    const pickIn = submit(started, { now: 2000 }, 'p1', 'RB').state;
+    const { state, outbox } = reduce(pickIn, { type: 'ANNOUNCE_DONE' }, { now: 5000 });
+    expect(state.status).toBe('ON_CLOCK');
+    expect(state.pointer).toBe(2);
+    expect(state.pickDeadline).toBe(5000 + 90 * 1000);
+    expect(state.announceUntil).toBeUndefined();
+    expect(state.pendingPick).toBeUndefined();
+    expect(state.version).toBe(pickIn.version + 1);
+    expect(outbox[0]?.type).toBe('SYNC');
+    // Only now can the next team draft.
+    const { state: after } = submit(state, { now: 6000 }, 'p2', 'WR');
+    expect(after.picks).toHaveLength(2);
+    expect(after.pointer).toBe(3);
+  });
+
+  it('rejects ANNOUNCE_DONE when not in PICK_IN', () => {
+    expect(reduce(started, { type: 'ANNOUNCE_DONE' }, { now: 0 }).outbox[0]).toMatchObject({
+      type: 'REJECT',
+      payload: { code: 'BAD_STATE' },
+    });
+  });
+
+  it('transitions to COMPLETE on the final pick with no lockout', () => {
     // teams 2, rounds 1 → only 2 picks total
     let s = reduce(
       setupDraft(makeSettings({ teams: 2, rounds: 1, mode: 'linear' }), [1, 2]),
@@ -195,12 +230,14 @@ describe('SUBMIT_PICK + waiting-period deadline (DESIGN §5.2)', () => {
       { now: 0 },
     ).state;
     s = submit(s, { now: 10 }, 'a', 'QB').state;
+    s = reduce(s, { type: 'ANNOUNCE_DONE' }, { now: 15 }).state; // end team 1's lockout
     const { state, outbox } = submit(s, { now: 20 }, 'b', 'RB');
     expect(state.status).toBe('COMPLETE');
     expect(state.pickDeadline).toBeUndefined();
+    expect(state.announceUntil).toBeUndefined();
     expect(outbox[0]).toMatchObject({
       type: 'PICK_MADE',
-      payload: { nextTeamSlot: null, nextPickDeadline: null },
+      payload: { nextTeamSlot: null, announceUntil: null },
     });
   });
 });
@@ -238,7 +275,7 @@ describe('SUBMIT_PICK rejections', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'dup', 'RB').state;
+    s = place(s, { now: 1 }, 'dup', 'RB');
     const { outbox } = submit(s, { now: 2 }, 'dup', 'WR');
     expect(outbox[0]).toMatchObject({ type: 'REJECT', payload: { code: 'PLAYER_TAKEN' } });
   });
@@ -269,19 +306,21 @@ describe('multi-step UNDO', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'p1', 'RB').state; // v2 ptr2
-    s = submit(s, { now: 2 }, 'p2', 'WR').state; // v3 ptr3
-    s = submit(s, { now: 3 }, 'p3', 'TE').state; // v4 ptr4
-    expect(s.version).toBe(4);
+    // Each `place` bumps version twice (the pick, then ANNOUNCE_DONE ending the
+    // lockout): START v1 → v3 ptr2 → v5 ptr3 → v7 ptr4.
+    s = place(s, { now: 1 }, 'p1', 'RB');
+    s = place(s, { now: 2 }, 'p2', 'WR');
+    s = place(s, { now: 3 }, 'p3', 'TE');
+    expect(s.version).toBe(7);
     expect(s.pointer).toBe(4);
 
-    s = reduce(s, { type: 'UNDO' }, { now: 100 }).state; // pop p3 → v5
-    s = reduce(s, { type: 'UNDO' }, { now: 200 }).state; // pop p2 → v6
+    s = reduce(s, { type: 'UNDO' }, { now: 100 }).state; // pop p3 → v8
+    s = reduce(s, { type: 'UNDO' }, { now: 200 }).state; // pop p2 → v9
     expect(s.picks.map((p) => p.playerId)).toEqual(['p1']);
     // pointer and pool ARE restored, but `version` is a forward-only token: it
-    // advances on undo too (4 → 5 → 6), so a stale expectedVersion never re-matches.
+    // advances on undo too (7 → 8 → 9), so a stale expectedVersion never re-matches.
     expect(s.pointer).toBe(2);
-    expect(s.version).toBe(6);
+    expect(s.version).toBe(9);
     expect(s.status).toBe('ON_CLOCK');
     expect(s.pendingPick).toBeUndefined();
     expect(s.pickDeadline).toBe(200 + 90 * 1000); // re-armed with the timer
@@ -511,8 +550,8 @@ describe('EDIT_PICK', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'p1', 'RB').state;
-    s = submit(s, { now: 2 }, 'p2', 'WR').state;
+    s = place(s, { now: 1 }, 'p1', 'RB');
+    s = place(s, { now: 2 }, 'p2', 'WR');
     expect(
       reduce(s, { type: 'EDIT_PICK', overall: 99, playerId: 'x', position: 'RB' }, { now: 0 })
         .outbox[0],
@@ -569,9 +608,9 @@ describe('REASSIGN_PICK', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'p1', 'RB').state;
-    s = submit(s, { now: 2 }, 'p2', 'WR').state;
-    s = submit(s, { now: 3 }, 'p3', 'TE').state;
+    s = place(s, { now: 1 }, 'p1', 'RB');
+    s = place(s, { now: 2 }, 'p2', 'WR');
+    s = place(s, { now: 3 }, 'p3', 'TE');
     return s;
   }
 
@@ -608,9 +647,9 @@ describe('REMOVE_PICK', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'p1', 'RB').state;
-    s = submit(s, { now: 2 }, 'p2', 'WR').state;
-    s = submit(s, { now: 3 }, 'p3', 'TE').state; // pointer 4
+    s = place(s, { now: 1 }, 'p1', 'RB');
+    s = place(s, { now: 2 }, 'p2', 'WR');
+    s = place(s, { now: 3 }, 'p3', 'TE'); // pointer 4
     const { state } = reduce(s, { type: 'REMOVE_PICK', overall: 2 }, { now: 9 });
     expect(state.picks.map((p) => p.overall)).toEqual([1, 3]); // no renumber
     expect(state.picks.some((p) => p.playerId === 'p2')).toBe(false);
@@ -637,9 +676,9 @@ describe('REWIND_TO', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'p1', 'RB').state;
-    s = submit(s, { now: 2 }, 'p2', 'WR').state;
-    s = submit(s, { now: 3 }, 'p3', 'TE').state; // pointer 4, version 4
+    s = place(s, { now: 1 }, 'p1', 'RB');
+    s = place(s, { now: 2 }, 'p2', 'WR');
+    s = place(s, { now: 3 }, 'p3', 'TE'); // pointer 4
     const { state } = reduce(s, { type: 'REWIND_TO', overall: 2 }, { now: 500 });
     expect(state.picks.map((p) => p.playerId)).toEqual(['p1']);
     expect(state.pointer).toBe(2);
@@ -661,7 +700,7 @@ describe('REWIND_TO', () => {
       { type: 'START' },
       { now: 0 },
     ).state;
-    s = submit(s, { now: 1 }, 'p1', 'RB').state;
+    s = place(s, { now: 1 }, 'p1', 'RB'); // land + end lockout so the clock is live
     s = reduce(s, { type: 'PAUSE' }, { now: 2 }).state;
     const { state } = reduce(s, { type: 'REWIND_TO', overall: 1 }, { now: 700 });
     expect(state.picks).toHaveLength(0);
@@ -693,7 +732,7 @@ describe('snake vs linear across full rounds (on-clock sequence)', () => {
     const seen: number[] = [];
     for (let i = 0; i < 9; i++) {
       seen.push(slotForOverallPick(s.pointer, 3, s.order, 'linear'));
-      s = submit(s, { now: i }, `pl${i}`, 'RB').state;
+      s = place(s, { now: i }, `pl${i}`, 'RB');
     }
     expect(seen).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3]);
     expect(s.status).toBe('COMPLETE');
@@ -708,7 +747,7 @@ describe('snake vs linear across full rounds (on-clock sequence)', () => {
     const seen: number[] = [];
     for (let i = 0; i < 9; i++) {
       seen.push(slotForOverallPick(s.pointer, 3, s.order, 'snake'));
-      s = submit(s, { now: i }, `sn${i}`, 'RB').state;
+      s = place(s, { now: i }, `sn${i}`, 'RB');
     }
     expect(seen).toEqual([1, 2, 3, 3, 2, 1, 1, 2, 3]);
     expect(s.status).toBe('COMPLETE');

@@ -22,6 +22,7 @@ export interface InboundEnvelope {
 export const ADMIN_EVENTS: ReadonlySet<DraftEventType> = new Set<DraftEventType>([
   'START_REVEAL',
   'REVEAL_DONE',
+  'ANNOUNCE_DONE',
   'START',
   'GO_LIVE',
   'PAUSE',
@@ -94,6 +95,7 @@ export function mapEnvelopeToEvent(env: InboundEnvelope): MapResult {
     case 'RESUME':
     case 'UNDO':
     case 'REVEAL_DONE':
+    case 'ANNOUNCE_DONE':
       return { ok: true, admin: true, event: { type: env.type } };
     case 'START_REVEAL': {
       if (p.game !== 'envelopes') return bad("START_REVEAL requires game:'envelopes'");

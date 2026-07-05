@@ -152,6 +152,8 @@ async function createDraft(deps: Deps, req: HttpRequest, leagueId: string): Prom
       typeof raw.goLiveCountdownSec === 'number' && raw.goLiveCountdownSec >= 0
         ? Math.floor(raw.goLiveCountdownSec)
         : 30,
+    // Byes show by default; only an explicit `false` hides them.
+    showByeWeeks: raw.showByeWeeks !== false,
   };
   const teams = buildTeams(body.teams, settings.teams);
   if (!teams) return err(400, 'BAD_REQUEST', 'teams must match settings.teams');

@@ -29,9 +29,12 @@ export interface ReduceResult {
   outbox: OutboundMessage[];
 }
 
-/** A team is live on the clock in both ON_CLOCK and the PICK_IN announcement window. */
+/**
+ * A team can draft only in ON_CLOCK. PICK_IN is the hard announcement lockout —
+ * no pick clock, no picks — until ANNOUNCE_DONE flips it back to ON_CLOCK.
+ */
 function isLive(state: DraftState): boolean {
-  return state.status === 'ON_CLOCK' || state.status === 'PICK_IN';
+  return state.status === 'ON_CLOCK';
 }
 
 function takenIds(state: DraftState): Set<string> {
@@ -78,8 +81,10 @@ function deadlineFrom(now: number, secs: number): number {
 /**
  * Apply a pick (manual or auto) at the current pointer, advance the pointer, and
  * emit the single PICK_MADE broadcast carrying the completed pick plus the next
- * team's deadline = now + waitingSec + timerSec (DESIGN §5.2). The final pick
- * transitions to COMPLETE with no next clock.
+ * team and `announceUntil = now + waitingSec` (DESIGN §5.2). The draft enters the
+ * PICK_IN announcement lockout: NO pick clock runs and every SUBMIT_PICK is
+ * rejected until ANNOUNCE_DONE fires at `announceUntil`. The final pick
+ * transitions straight to COMPLETE with no lockout.
  */
 function applyPick(
   state: DraftState,
@@ -114,6 +119,7 @@ function applyPick(
       status: 'COMPLETE',
       pendingPick: pick,
       pickDeadline: undefined,
+      announceUntil: undefined,
     };
     return {
       state: next,
@@ -121,7 +127,7 @@ function applyPick(
         {
           type: 'PICK_MADE',
           draftId: state.draftId,
-          payload: { pick, nextTeamSlot: null, nextPickDeadline: null },
+          payload: { pick, nextTeamSlot: null, announceUntil: null },
           version,
         },
       ],
@@ -134,7 +140,9 @@ function applyPick(
     state.order,
     state.settings.mode,
   );
-  const nextPickDeadline = deadlineFrom(now, state.settings.waitingSec + state.settings.timerSec);
+  // Enter the hard announcement lockout: pointer has advanced to the next team
+  // but there is NO pick clock yet, and picks are rejected until ANNOUNCE_DONE.
+  const announceUntil = deadlineFrom(now, state.settings.waitingSec);
   const next: DraftState = {
     ...state,
     picks,
@@ -142,7 +150,8 @@ function applyPick(
     version,
     status: 'PICK_IN',
     pendingPick: pick,
-    pickDeadline: nextPickDeadline,
+    pickDeadline: undefined,
+    announceUntil,
   };
   return {
     state: next,
@@ -150,7 +159,7 @@ function applyPick(
       {
         type: 'PICK_MADE',
         draftId: state.draftId,
-        payload: { pick, nextTeamSlot, nextPickDeadline },
+        payload: { pick, nextTeamSlot, announceUntil },
         version,
       },
     ],
@@ -166,6 +175,9 @@ function submitPick(
   event: Extract<DraftEvent, { type: 'SUBMIT_PICK' }>,
   ctx: ReduceContext,
 ): ReduceResult {
+  if (state.status === 'PICK_IN') {
+    return reject(state, 'ANNOUNCING', 'The pick is being announced — nobody can draft yet.');
+  }
   if (!isLive(state)) return reject(state, 'NOT_ON_CLOCK', 'No team is on the clock.');
   if (event.expectedVersion !== undefined && event.expectedVersion !== state.version) {
     return reject(state, 'STALE_VERSION', 'Submitted against a stale draft version.');
@@ -302,6 +314,26 @@ function goLive(state: DraftState, ctx: ReduceContext): ReduceResult {
   return firstOnClock(state, ctx);
 }
 
+/**
+ * End the announcement lockout (PICK_IN → ON_CLOCK): the next team goes live with
+ * a fresh pick clock. Only now can anyone draft. Fired by the scheduler at
+ * `announceUntil` and by an admin "Skip announcement".
+ */
+function announceDone(state: DraftState, ctx: ReduceContext): ReduceResult {
+  if (state.status !== 'PICK_IN') {
+    return reject(state, 'BAD_STATE', 'No pick is being announced.');
+  }
+  const next: DraftState = {
+    ...state,
+    status: 'ON_CLOCK',
+    pickDeadline: deadlineFrom(ctx.now, state.settings.timerSec),
+    announceUntil: undefined,
+    pendingPick: undefined,
+    version: state.version + 1,
+  };
+  return sync(next, ctx);
+}
+
 function pause(state: DraftState, ctx: ReduceContext): ReduceResult {
   if (!isLive(state)) return reject(state, 'BAD_STATE', 'Only a live clock can be paused.');
   const remaining = Math.max(0, (state.pickDeadline ?? ctx.now) - ctx.now);
@@ -344,6 +376,7 @@ function undo(state: DraftState, ctx: ReduceContext): ReduceResult {
     // Re-arm the clock for the team back on the clock; no stale announcement.
     pickDeadline: deadlineFrom(ctx.now, state.settings.timerSec),
     pendingPick: undefined,
+    announceUntil: undefined,
     pausedRemainingMs: undefined,
   };
   return sync(next, ctx);
@@ -385,6 +418,7 @@ function setOnClock(
     pointer: event.overall,
     pickDeadline: deadlineFrom(ctx.now, state.settings.timerSec),
     pendingPick: undefined,
+    announceUntil: undefined,
     pausedRemainingMs: undefined,
     version: state.version + 1,
   };
@@ -455,6 +489,7 @@ function rewindTo(
     status: 'ON_CLOCK',
     pickDeadline: deadlineFrom(ctx.now, state.settings.timerSec),
     pendingPick: undefined,
+    announceUntil: undefined,
     pausedRemainingMs: undefined,
     version: state.version + 1,
   };
@@ -479,6 +514,8 @@ export function reduce(state: DraftState, event: DraftEvent, ctx: ReduceContext)
       return start(state, ctx);
     case 'GO_LIVE':
       return goLive(state, ctx);
+    case 'ANNOUNCE_DONE':
+      return announceDone(state, ctx);
     case 'PAUSE':
       return pause(state, ctx);
     case 'RESUME':

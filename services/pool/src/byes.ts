@@ -1,0 +1,50 @@
+/**
+ * Static NFL bye-week table (team abbr → bye week), attached to pool players by
+ * the builder. Bye week is factual schedule data, NOT a ranking signal, so it is
+ * allowed under AD-6.
+ *
+ * YEARLY-UPDATE TABLE: the NFL bye schedule changes every season. Refresh this
+ * map for the upcoming season before regenerating the bundled snapshot; a team
+ * missing here simply attaches no `bye` (the UI hides it). Values below are the
+ * 2025 regular-season byes.
+ */
+export const TEAM_BYE: Readonly<Record<string, number>> = {
+  ATL: 5,
+  CHI: 5,
+  GB: 5,
+  PIT: 5,
+  HOU: 6,
+  MIN: 6,
+  BAL: 7,
+  BUF: 7,
+  ARI: 8,
+  DET: 8,
+  JAX: 8,
+  LV: 8,
+  LAR: 8,
+  SEA: 8,
+  CLE: 9,
+  NYJ: 9,
+  PHI: 9,
+  TB: 9,
+  CIN: 10,
+  DAL: 10,
+  KC: 10,
+  TEN: 10,
+  IND: 11,
+  NO: 11,
+  DEN: 12,
+  LAC: 12,
+  MIA: 12,
+  WAS: 12,
+  CAR: 14,
+  NE: 14,
+  NYG: 14,
+  SF: 14,
+};
+
+/** Resolve a team's bye week, or undefined when the team is unknown/absent. */
+export function byeForTeam(team: string | null | undefined): number | undefined {
+  if (!team) return undefined;
+  return TEAM_BYE[team];
+}

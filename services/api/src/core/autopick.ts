@@ -3,7 +3,8 @@
  * armed by `reconcileScheduler`. It does the right thing per state:
  *   - REVEALING (at reveal end)     → dispatch `REVEAL_DONE` (order is set)
  *   - STARTING (at `liveAt`)        → dispatch `GO_LIVE` (first team on the clock)
- *   - ON_CLOCK / PICK_IN (deadline) → dispatch `TIMER_EXPIRE` (auto-pick, AD-11)
+ *   - PICK_IN (at `announceUntil`)  → dispatch `ANNOUNCE_DONE` (lockout ends)
+ *   - ON_CLOCK (at `pickDeadline`)  → dispatch `TIMER_EXPIRE` (auto-pick, AD-11)
  * Then commit, fan out, and re-arm. A manual pick / "Go now" that already
  * advanced `version` makes the fire a no-op (its `expectedVersion` no longer
  * matches — idempotent; no double action).
@@ -30,7 +31,9 @@ export async function onTimerFire(deps: Deps, fire: TimerFire): Promise<void> {
     event = { type: 'REVEAL_DONE' };
   } else if (state.status === 'STARTING') {
     event = { type: 'GO_LIVE' };
-  } else if (state.status === 'ON_CLOCK' || state.status === 'PICK_IN') {
+  } else if (state.status === 'PICK_IN') {
+    event = { type: 'ANNOUNCE_DONE' };
+  } else if (state.status === 'ON_CLOCK') {
     if (!state.poolSnapshotId) return;
     const snapshot = await deps.pool.load(state.poolSnapshotId);
     const taken = new Set(state.picks.map((pick) => pick.playerId));
