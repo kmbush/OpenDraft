@@ -9,7 +9,7 @@
  * data dependency the pure engine cannot compute itself, the set of currently
  * available players for an auto-pick, is carried on `TIMER_EXPIRE` (AD-11).
  */
-import type { PlayerRef, Position } from './domain.js';
+import type { PlayerRef, Position, RevealGame } from './domain.js';
 
 /** A player pick submitted from a station for the on-clock team. */
 export interface SubmitPickEvent {
@@ -33,9 +33,35 @@ export interface TimerExpireEvent {
   expectedVersion?: number;
 }
 
-/** Admin: begin the draft (ORDER_SET → ON_CLOCK). */
+/**
+ * Admin: run "The Reveal" — roll a fair draft order and play the reveal show.
+ * Valid from SETUP/ORDER_SET. The engine commits the rolled order immediately
+ * and parks in REVEALING; the board unveils it while the admin stays blind.
+ */
+export interface StartRevealEvent {
+  type: 'START_REVEAL';
+  game: RevealGame;
+}
+
+/**
+ * End the reveal show (REVEALING → ORDER_SET, order preserved). Fired by the
+ * scheduler when the animation finishes, and by an admin "Skip to result".
+ */
+export interface RevealDoneEvent {
+  type: 'REVEAL_DONE';
+}
+
+/** Admin: begin the draft (ORDER_SET → STARTING, or straight to ON_CLOCK if no countdown). */
 export interface StartEvent {
   type: 'START';
+}
+
+/**
+ * End the pre-draft countdown (STARTING → ON_CLOCK, first team on the clock).
+ * Fired by the scheduler at `liveAt` and by an admin "Go now".
+ */
+export interface GoLiveEvent {
+  type: 'GO_LIVE';
 }
 
 /** Admin: freeze the clock, storing remaining ms. */
@@ -79,16 +105,50 @@ export interface SetOrderEvent {
   order: number[];
 }
 
+/**
+ * Admin: move a drafted player to a different team. Only the stored `teamSlot`
+ * changes; draft order and pointer are untouched (rosters derive from picks).
+ */
+export interface ReassignPickEvent {
+  type: 'REASSIGN_PICK';
+  overall: number;
+  teamSlot: number;
+}
+
+/**
+ * Admin: undraft a specific player. Removes that pick from the log without
+ * renumbering the others — the team is left one pick lighter (the correction).
+ */
+export interface RemovePickEvent {
+  type: 'REMOVE_PICK';
+  overall: number;
+}
+
+/**
+ * Admin: rewind the draft to overall pick `N` — drop every pick at `overall >= N`
+ * and put team N back on the clock. The multi-step "undo back to pick N".
+ */
+export interface RewindToEvent {
+  type: 'REWIND_TO';
+  overall: number;
+}
+
 export type DraftEvent =
   | SubmitPickEvent
   | TimerExpireEvent
+  | StartRevealEvent
+  | RevealDoneEvent
   | StartEvent
+  | GoLiveEvent
   | PauseEvent
   | ResumeEvent
   | UndoEvent
   | EditPickEvent
   | SetOnClockEvent
   | EditOrderEvent
-  | SetOrderEvent;
+  | SetOrderEvent
+  | ReassignPickEvent
+  | RemovePickEvent
+  | RewindToEvent;
 
 export type DraftEventType = DraftEvent['type'];

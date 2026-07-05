@@ -62,6 +62,7 @@ it('runs a full draft incl. an auto-pick, end to end', async () => {
     mode: 'linear',
     timerSec: 1,
     waitingSec: 0,
+    goLiveCountdownSec: 0,
     rosterFormat: { starters: { RB: 1 }, flex: [], bench: 1, positionMax: { RB: 8, WR: 8, QB: 4 } },
   };
   const created = (await post(
@@ -71,10 +72,11 @@ it('runs a full draft incl. an auto-pick, end to end', async () => {
   )) as { draftId: string };
   const draftId = created.draftId;
 
-  // A player from the bundled pool for the manual pick.
+  // The pool the station will draft from must be populated and rank-free.
   const pool = (await fetch(`${base}/pool/bundled.json`).then((r) => r.json())) as {
     players: Player[];
   };
+  expect(pool.players.length).toBeGreaterThan(100);
   const firstPlayer = pool.players[0];
   if (!firstPlayer) throw new Error('empty pool');
 
@@ -95,6 +97,12 @@ it('runs a full draft incl. an auto-pick, end to end', async () => {
     inbox,
     (m) => m.type === 'SYNC' && m.payload.state.status === 'ON_CLOCK',
   )) as Extract<OutboundMessage, { type: 'SYNC' }>;
+
+  // After START the draft is immediately draftable: a team is on the clock and
+  // the state references a pool the station can render (the bug Kyle hit was a
+  // draft created with no pool, leaving the station blank).
+  expect(started.payload.state.pointer).toBe(1);
+  expect(started.payload.state.poolSnapshotId).toBe('bundled');
 
   // Team 1 makes a manual pick at the current version.
   send({

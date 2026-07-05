@@ -49,3 +49,51 @@ describe('auto-pick fire (AD-11)', () => {
     expect(h.scheduler.armed).toEqual([]);
   });
 });
+
+describe('reveal-done fire (REVEALING show)', () => {
+  it('dispatches REVEAL_DONE, flips to ORDER_SET, and preserves the rolled order', async () => {
+    const revealing: DraftState = {
+      ...liveDraft(),
+      status: 'REVEALING',
+      pointer: 0,
+      order: [2, 1],
+      pickDeadline: undefined,
+      reveal: { game: 'envelopes', revealAt: 1000 },
+    };
+    h.persistence.seed(revealing);
+
+    await onTimerFire(h.deps, { draftId: 'D1', expectedVersion: revealing.version });
+
+    const stored = h.persistence.drafts.get('L1#D1') as DraftState;
+    expect(stored.status).toBe('ORDER_SET');
+    expect(stored.order).toEqual([2, 1]); // the reveal never changes the order
+    expect(stored.reveal).toBeUndefined();
+    expect(stored.version).toBe(revealing.version + 1);
+    expect(h.broadcaster.typesTo('c2')).toEqual(['SYNC']);
+    expect(h.scheduler.armed).toHaveLength(0); // nothing timed after the reveal
+  });
+});
+
+describe('go-live fire (STARTING countdown)', () => {
+  it('dispatches GO_LIVE, puts team 1 on the clock, and arms the pick clock', async () => {
+    const starting: DraftState = {
+      ...liveDraft(),
+      status: 'STARTING',
+      pointer: 0,
+      liveAt: 1000,
+      pickDeadline: undefined,
+    };
+    h.persistence.seed(starting);
+
+    await onTimerFire(h.deps, { draftId: 'D1', expectedVersion: starting.version });
+
+    const stored = h.persistence.drafts.get('L1#D1') as DraftState;
+    expect(stored.status).toBe('ON_CLOCK');
+    expect(stored.pointer).toBe(1);
+    expect(stored.liveAt).toBeUndefined();
+    expect(stored.version).toBe(starting.version + 1);
+    expect(stored.picks).toHaveLength(0); // no pick — just the clock
+    expect(h.broadcaster.typesTo('c2')).toEqual(['SYNC']);
+    expect(h.scheduler.armed).toHaveLength(1); // first pick clock armed
+  });
+});

@@ -5,3 +5,4 @@ export * from './messages.js';
 export * from './pool.js';
 export * from './league.js';
 export * from './constants.js';
+export * from './reveal.js';

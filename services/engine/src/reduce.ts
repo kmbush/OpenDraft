@@ -4,13 +4,14 @@
  * (CONVENTIONS §4.2, §10). Illegal events are rejected with a typed message,
  * never thrown (CONVENTIONS §4.5).
  */
-import type {
-  DraftEvent,
-  DraftState,
-  OutboundMessage,
-  Pick,
-  Position,
-  RejectCode,
+import {
+  type DraftEvent,
+  type DraftState,
+  type OutboundMessage,
+  type Pick,
+  type Position,
+  REVEAL_COUNTDOWN_MS,
+  type RejectCode,
 } from '@opendraft/shared';
 import { isValidOrder, pickInRound, roundForOverall, slotForOverallPick } from './ordering.js';
 import { legalCandidates, rosterCounts } from './roster.js';
@@ -205,6 +206,55 @@ function timerExpire(
   return applyPick(state, slot, chosen.id, chosen.position, true, ctx.now);
 }
 
+/** Fisher–Yates over the team slots `[1..teams]` using the injected RNG. */
+function rollOrder(teams: number, rng: () => number): number[] {
+  const slots = Array.from({ length: teams }, (_, i) => i + 1);
+  for (let i = slots.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [slots[i], slots[j]] = [slots[j] as number, slots[i] as number];
+  }
+  return slots;
+}
+
+/**
+ * Run "The Reveal": roll a fair draft order NOW and commit it, then park in
+ * REVEALING with `revealAt` = when the 30s countdown ends. The order is decided
+ * here (never by the show); the board only unveils it. No re-rolls — the admin
+ * console stays blind until REVEAL_DONE (in-person threat model, DESIGN).
+ */
+function startReveal(
+  state: DraftState,
+  event: Extract<DraftEvent, { type: 'START_REVEAL' }>,
+  ctx: ReduceContext,
+): ReduceResult {
+  if (state.status !== 'SETUP' && state.status !== 'ORDER_SET') {
+    return reject(state, 'BAD_STATE', 'The reveal can only run before the draft starts.');
+  }
+  if (!ctx.rng) return reject(state, 'RNG_REQUIRED', 'The reveal requires an injected rng.');
+  const next: DraftState = {
+    ...state,
+    order: rollOrder(state.settings.teams, ctx.rng),
+    status: 'REVEALING',
+    reveal: { game: event.game, revealAt: ctx.now + REVEAL_COUNTDOWN_MS },
+    version: state.version + 1,
+  };
+  return sync(next, ctx);
+}
+
+/** End the reveal show (REVEALING → ORDER_SET), keeping the committed order. */
+function revealDone(state: DraftState, ctx: ReduceContext): ReduceResult {
+  if (state.status !== 'REVEALING') {
+    return reject(state, 'BAD_STATE', 'No reveal is in progress.');
+  }
+  const next: DraftState = {
+    ...state,
+    status: 'ORDER_SET',
+    reveal: undefined,
+    version: state.version + 1,
+  };
+  return sync(next, ctx);
+}
+
 function start(state: DraftState, ctx: ReduceContext): ReduceResult {
   if (state.status !== 'ORDER_SET') {
     return reject(state, 'BAD_STATE', 'START requires an ORDER_SET draft.');
@@ -212,16 +262,44 @@ function start(state: DraftState, ctx: ReduceContext): ReduceResult {
   if (!isValidOrder(state.order, state.settings.teams)) {
     return reject(state, 'INVALID_ORDER', 'Draft order is not a valid permutation.');
   }
+  // A configured countdown parks the draft in STARTING (the "DRAFT IS LIVE IN…"
+  // pre-game hype) with pointer 0 and no pick clock; GO_LIVE puts team 1 on the
+  // clock. A zero countdown skips straight to the first pick.
+  if (state.settings.goLiveCountdownSec > 0) {
+    const next: DraftState = {
+      ...state,
+      status: 'STARTING',
+      pointer: 0,
+      liveAt: deadlineFrom(ctx.now, state.settings.goLiveCountdownSec),
+      pickDeadline: undefined,
+      pendingPick: undefined,
+      version: state.version + 1,
+    };
+    return sync(next, ctx);
+  }
+  return firstOnClock(state, ctx);
+}
+
+/** ORDER_SET/STARTING → ON_CLOCK for team 1 with a fresh pick clock. */
+function firstOnClock(state: DraftState, ctx: ReduceContext): ReduceResult {
   const next: DraftState = {
     ...state,
     status: 'ON_CLOCK',
     pointer: 1,
     // First team just gets the pick clock — there is no prior "pick is in" to wait on.
     pickDeadline: deadlineFrom(ctx.now, state.settings.timerSec),
+    liveAt: undefined,
     pendingPick: undefined,
     version: state.version + 1,
   };
   return sync(next, ctx);
+}
+
+function goLive(state: DraftState, ctx: ReduceContext): ReduceResult {
+  if (state.status !== 'STARTING') {
+    return reject(state, 'BAD_STATE', 'GO_LIVE requires a STARTING draft.');
+  }
+  return firstOnClock(state, ctx);
 }
 
 function pause(state: DraftState, ctx: ReduceContext): ReduceResult {
@@ -330,6 +408,59 @@ function applyOrder(state: DraftState, order: number[], ctx: ReduceContext): Red
   return sync(next, ctx);
 }
 
+function reassignPick(
+  state: DraftState,
+  event: Extract<DraftEvent, { type: 'REASSIGN_PICK' }>,
+  ctx: ReduceContext,
+): ReduceResult {
+  const idx = state.picks.findIndex((p) => p.overall === event.overall);
+  const target = state.picks[idx];
+  if (!target) return reject(state, 'PICK_NOT_FOUND', `No pick at overall ${event.overall}.`);
+  if (event.teamSlot < 1 || event.teamSlot > state.settings.teams) {
+    return reject(state, 'OUT_OF_RANGE', `teamSlot ${event.teamSlot} is out of range.`);
+  }
+  // Rosters derive from `pick.teamSlot`, so re-homing a player is this one edit.
+  const picks = [...state.picks];
+  picks[idx] = { ...target, teamSlot: event.teamSlot };
+  return sync({ ...state, picks, version: state.version + 1 }, ctx);
+}
+
+function removePick(
+  state: DraftState,
+  event: Extract<DraftEvent, { type: 'REMOVE_PICK' }>,
+  ctx: ReduceContext,
+): ReduceResult {
+  const exists = state.picks.some((p) => p.overall === event.overall);
+  if (!exists) return reject(state, 'PICK_NOT_FOUND', `No pick at overall ${event.overall}.`);
+  // Drop just this pick; the player returns to the pool (taken-ids derive from
+  // the log) and the others keep their overall numbers (DESIGN §5.4).
+  const picks = state.picks.filter((p) => p.overall !== event.overall);
+  return sync({ ...state, picks, version: state.version + 1 }, ctx);
+}
+
+function rewindTo(
+  state: DraftState,
+  event: Extract<DraftEvent, { type: 'REWIND_TO' }>,
+  ctx: ReduceContext,
+): ReduceResult {
+  if (event.overall < 1 || event.overall > state.pointer) {
+    return reject(state, 'OUT_OF_RANGE', `overall ${event.overall} is out of range.`);
+  }
+  // Drop the whole tail from N on, put team N back on the clock, re-arm the timer.
+  const picks = state.picks.filter((p) => p.overall < event.overall);
+  const next: DraftState = {
+    ...state,
+    picks,
+    pointer: event.overall,
+    status: 'ON_CLOCK',
+    pickDeadline: deadlineFrom(ctx.now, state.settings.timerSec),
+    pendingPick: undefined,
+    pausedRemainingMs: undefined,
+    version: state.version + 1,
+  };
+  return sync(next, ctx);
+}
+
 /**
  * The single entry point. `reduce(state, event, ctx) => { state, outbox }`.
  * Pure and deterministic given `ctx`.
@@ -340,8 +471,14 @@ export function reduce(state: DraftState, event: DraftEvent, ctx: ReduceContext)
       return submitPick(state, event, ctx);
     case 'TIMER_EXPIRE':
       return timerExpire(state, event, ctx);
+    case 'START_REVEAL':
+      return startReveal(state, event, ctx);
+    case 'REVEAL_DONE':
+      return revealDone(state, ctx);
     case 'START':
       return start(state, ctx);
+    case 'GO_LIVE':
+      return goLive(state, ctx);
     case 'PAUSE':
       return pause(state, ctx);
     case 'RESUME':
@@ -356,5 +493,11 @@ export function reduce(state: DraftState, event: DraftEvent, ctx: ReduceContext)
       return applyOrder(state, event.order, ctx);
     case 'EDIT_ORDER':
       return applyOrder(state, event.order, ctx);
+    case 'REASSIGN_PICK':
+      return reassignPick(state, event, ctx);
+    case 'REMOVE_PICK':
+      return removePick(state, event, ctx);
+    case 'REWIND_TO':
+      return rewindTo(state, event, ctx);
   }
 }

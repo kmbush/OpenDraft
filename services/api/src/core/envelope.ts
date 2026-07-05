@@ -20,7 +20,10 @@ export interface InboundEnvelope {
 
 /** Admin-only events; each requires a valid session token (AD-8, DESIGN §5.4). */
 export const ADMIN_EVENTS: ReadonlySet<DraftEventType> = new Set<DraftEventType>([
+  'START_REVEAL',
+  'REVEAL_DONE',
   'START',
+  'GO_LIVE',
   'PAUSE',
   'RESUME',
   'UNDO',
@@ -28,6 +31,9 @@ export const ADMIN_EVENTS: ReadonlySet<DraftEventType> = new Set<DraftEventType>
   'SET_ON_CLOCK',
   'EDIT_ORDER',
   'SET_ORDER',
+  'REASSIGN_PICK',
+  'REMOVE_PICK',
+  'REWIND_TO',
 ]);
 
 /** `SYNC` is a snapshot *request*, not a state mutation. */
@@ -83,10 +89,16 @@ export function mapEnvelopeToEvent(env: InboundEnvelope): MapResult {
       };
     }
     case 'START':
+    case 'GO_LIVE':
     case 'PAUSE':
     case 'RESUME':
     case 'UNDO':
+    case 'REVEAL_DONE':
       return { ok: true, admin: true, event: { type: env.type } };
+    case 'START_REVEAL': {
+      if (p.game !== 'envelopes') return bad("START_REVEAL requires game:'envelopes'");
+      return { ok: true, admin: true, event: { type: 'START_REVEAL', game: 'envelopes' } };
+    }
     case 'EDIT_PICK': {
       if (!isNum(p.overall) || !isStr(p.playerId) || !isPosition(p.position)) {
         return bad('EDIT_PICK requires overall, playerId, position');
@@ -110,6 +122,24 @@ export function mapEnvelopeToEvent(env: InboundEnvelope): MapResult {
     case 'SET_ORDER': {
       if (!isNumArray(p.order)) return bad(`${env.type} requires order:number[]`);
       return { ok: true, admin: true, event: { type: env.type, order: p.order } };
+    }
+    case 'REASSIGN_PICK': {
+      if (!isNum(p.overall) || !isNum(p.teamSlot)) {
+        return bad('REASSIGN_PICK requires overall, teamSlot');
+      }
+      return {
+        ok: true,
+        admin: true,
+        event: { type: 'REASSIGN_PICK', overall: p.overall, teamSlot: p.teamSlot },
+      };
+    }
+    case 'REMOVE_PICK': {
+      if (!isNum(p.overall)) return bad('REMOVE_PICK requires overall');
+      return { ok: true, admin: true, event: { type: 'REMOVE_PICK', overall: p.overall } };
+    }
+    case 'REWIND_TO': {
+      if (!isNum(p.overall)) return bad('REWIND_TO requires overall');
+      return { ok: true, admin: true, event: { type: 'REWIND_TO', overall: p.overall } };
     }
     case 'TIMER_EXPIRE':
       return { ok: false, code: 'BAD_REQUEST', message: 'TIMER_EXPIRE is internal-only' };

@@ -143,8 +143,16 @@ async function createDraft(deps: Deps, req: HttpRequest, leagueId: string): Prom
   if (!(await requireAdmin(deps, req))) return err(401, 'UNAUTHORIZED', 'Admin session required');
   const body = parseBody(req);
   if (!body) return err(400, 'BAD_REQUEST', 'invalid body');
-  const settings = body.settings as DraftSettings | undefined;
-  if (!isSettings(settings)) return err(400, 'BAD_REQUEST', 'valid settings required');
+  const raw = body.settings as DraftSettings | undefined;
+  if (!isSettings(raw)) return err(400, 'BAD_REQUEST', 'valid settings required');
+  // Default the pre-draft countdown when a client omits it (30s; 0 = skip).
+  const settings: DraftSettings = {
+    ...raw,
+    goLiveCountdownSec:
+      typeof raw.goLiveCountdownSec === 'number' && raw.goLiveCountdownSec >= 0
+        ? Math.floor(raw.goLiveCountdownSec)
+        : 30,
+  };
   const teams = buildTeams(body.teams, settings.teams);
   if (!teams) return err(400, 'BAD_REQUEST', 'teams must match settings.teams');
 
@@ -198,7 +206,9 @@ async function poolPointer(deps: Deps, leagueId: string, draftId: string): Promi
 function isTheme(v: unknown): v is Theme {
   if (typeof v !== 'object' || v === null) return false;
   const t = v as Record<string, unknown>;
-  return typeof t.colors === 'object' && t.colors !== null;
+  if (t.colors !== undefined && (typeof t.colors !== 'object' || t.colors === null)) return false;
+  if (t.logo !== undefined && typeof t.logo !== 'string') return false;
+  return true;
 }
 
 function isSettings(v: unknown): v is DraftSettings {
@@ -215,19 +225,31 @@ function isSettings(v: unknown): v is DraftSettings {
   );
 }
 
+/** Neutral team color used when a slot arrives without a valid `#rrggbb` override. */
+const DEFAULT_TEAM_COLOR = '#64748b';
+const isHexColor = (v: unknown): v is string =>
+  typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
+
 function buildTeams(raw: unknown, count: number): Team[] | null {
   if (raw === undefined) {
-    return Array.from({ length: count }, (_, i) => ({ slot: i + 1, name: `Team ${i + 1}` }));
+    return Array.from({ length: count }, (_, i) => ({
+      slot: i + 1,
+      name: `Team ${i + 1}`,
+      color: DEFAULT_TEAM_COLOR,
+    }));
   }
   if (!Array.isArray(raw) || raw.length !== count) return null;
   const teams: Team[] = [];
   for (let i = 0; i < raw.length; i++) {
     const t = raw[i] as Record<string, unknown>;
-    const name = typeof t?.name === 'string' ? t.name : `Team ${i + 1}`;
+    const name = typeof t?.name === 'string' && t.name.trim() ? t.name : `Team ${i + 1}`;
     teams.push({
       slot: i + 1,
       name,
-      ...(typeof t?.ownerLabel === 'string' ? { ownerLabel: t.ownerLabel } : {}),
+      color: isHexColor(t?.color) ? t.color : DEFAULT_TEAM_COLOR,
+      ...(typeof t?.ownerLabel === 'string' && t.ownerLabel.trim()
+        ? { ownerLabel: t.ownerLabel }
+        : {}),
     });
   }
   return teams;

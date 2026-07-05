@@ -17,12 +17,31 @@ export type DraftMode = 'snake' | 'linear';
 export type FlexKind = 'FLEX' | 'SUPERFLEX' | 'IDP_FLEX';
 
 /**
- * Draft lifecycle states (DESIGN §5.1). `PICK_IN` is the transient
- * "the pick is in" announcement window; a team is still live on the clock
- * during it (the next deadline is already set), so picks are accepted in both
- * `ON_CLOCK` and `PICK_IN`.
+ * Draft lifecycle states (DESIGN §5.1). `STARTING` is the pre-draft "DRAFT IS
+ * LIVE IN 0:30…" countdown that runs after START before the first pick clock —
+ * no team is on the clock yet (see `liveAt`). `REVEALING` is the draft-order
+ * reveal show ("The Reveal"): the order is already committed to state, but the
+ * board unveils it via an animation while the admin console stays blind (see
+ * `reveal`). `PICK_IN` is the transient "the pick is in" announcement window; a
+ * team is still live on the clock during it (the next deadline is already set),
+ * so picks are accepted in both `ON_CLOCK` and `PICK_IN`.
  */
-export type DraftStatus = 'SETUP' | 'ORDER_SET' | 'ON_CLOCK' | 'PICK_IN' | 'PAUSED' | 'COMPLETE';
+export type DraftStatus =
+  | 'SETUP'
+  | 'ORDER_SET'
+  | 'REVEALING'
+  | 'STARTING'
+  | 'ON_CLOCK'
+  | 'PICK_IN'
+  | 'PAUSED'
+  | 'COMPLETE';
+
+/**
+ * A draft-order reveal game (DESIGN "The Reveal"). Only the envelope draft
+ * lottery ships today; the type is a union so new shows (Plinko, a race, …) are
+ * a new literal + a board component, never an engine change.
+ */
+export type RevealGame = 'envelopes';
 
 /**
  * A draftable player. Deliberately has NO ranking fields, ever (CONVENTIONS §5)
@@ -79,6 +98,11 @@ export interface DraftSettings {
   timerSec: number;
   /** "The pick is in" waiting window before the next clock starts, in seconds. */
   waitingSec: number;
+  /**
+   * Pre-draft "DRAFT IS LIVE IN…" countdown shown after START, in seconds
+   * (the STARTING phase). `0` skips straight to the first pick clock.
+   */
+  goLiveCountdownSec: number;
 }
 
 /** A drafting team. `slot` is the stable 1-based identity used by `order` and picks. */
@@ -86,6 +110,8 @@ export interface Team {
   slot: number;
   name: string;
   ownerLabel?: string;
+  /** Team identity color as a `#rrggbb` hex; a display cue only, never a value signal. */
+  color?: string;
 }
 
 /**
@@ -122,6 +148,18 @@ export interface DraftState {
   pointer: number;
   /** Epoch ms the current clock expires; unset when not on a live clock. */
   pickDeadline?: number;
+  /**
+   * Epoch ms the pre-draft go-live countdown expires; set only in STARTING,
+   * cleared on GO_LIVE. The board renders the "DRAFT IS LIVE IN…" clock from it.
+   */
+  liveAt?: number;
+  /**
+   * The in-progress order reveal; set only in REVEALING, cleared on REVEAL_DONE.
+   * `order` is already committed at this point — the board drives the whole
+   * animation off `revealAt` (epoch ms the 30s countdown ends and the show
+   * begins) plus the shared reveal timings, so reconnects stay in sync.
+   */
+  reveal?: { game: RevealGame; revealAt: number };
   /** The just-made pick, surfaced during the PICK_IN announcement window. */
   pendingPick?: Pick;
   /** Remaining clock in ms captured on PAUSE, re-applied on RESUME. */

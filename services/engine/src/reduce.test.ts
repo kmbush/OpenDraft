@@ -1,8 +1,9 @@
 import type { DraftState, Position, RosterFormat } from '@opendraft/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { newDraft } from './draft.js';
-import { slotForOverallPick } from './ordering.js';
+import { isValidOrder, slotForOverallPick } from './ordering.js';
 import { type ReduceContext, reduce } from './reduce.js';
+import { rosterCounts } from './roster.js';
 import { makeSettings, makeTeams, pool, seededRng, setupDraft } from './test-helpers.js';
 
 /** Submit a pick for whichever team is currently on the clock. */
@@ -38,6 +39,114 @@ describe('START', () => {
     });
     const { state: next, outbox } = reduce(state, { type: 'START' }, { now: 1000 });
     expect(next).toBe(state); // unchanged
+    expect(outbox[0]).toMatchObject({ type: 'REJECT', payload: { code: 'BAD_STATE' } });
+  });
+
+  it('START with a countdown parks in STARTING (pointer 0, liveAt, no pick clock)', () => {
+    const state = setupDraft(makeSettings({ mode: 'linear', goLiveCountdownSec: 30 }));
+    const { state: next, outbox } = reduce(state, { type: 'START' }, { now: 1000 });
+    expect(next.status).toBe('STARTING');
+    expect(next.pointer).toBe(0);
+    expect(next.liveAt).toBe(1000 + 30 * 1000);
+    expect(next.pickDeadline).toBeUndefined();
+    expect(next.version).toBe(1);
+    expect(outbox[0]?.type).toBe('SYNC');
+  });
+
+  it('START with goLiveCountdownSec: 0 goes straight to ON_CLOCK', () => {
+    const state = setupDraft(makeSettings({ mode: 'linear', goLiveCountdownSec: 0 }));
+    const { state: next } = reduce(state, { type: 'START' }, { now: 1000 });
+    expect(next.status).toBe('ON_CLOCK');
+    expect(next.pointer).toBe(1);
+    expect(next.liveAt).toBeUndefined();
+    expect(next.pickDeadline).toBe(1000 + 90 * 1000);
+  });
+});
+
+describe('START_REVEAL / REVEAL_DONE (The Reveal)', () => {
+  it('rolls a valid permutation, parks in REVEALING with revealAt, bumps version', () => {
+    const state = setupDraft(makeSettings({ teams: 8, mode: 'linear' }));
+    const { state: next, outbox } = reduce(
+      state,
+      { type: 'START_REVEAL', game: 'envelopes' },
+      { now: 1000, rng: seededRng(42) },
+    );
+    expect(next.status).toBe('REVEALING');
+    expect(next.reveal).toEqual({ game: 'envelopes', revealAt: 1000 + 30_000 });
+    expect(isValidOrder(next.order, 8)).toBe(true);
+    expect(next.version).toBe(state.version + 1);
+    expect(outbox[0]?.type).toBe('SYNC');
+  });
+
+  it('is deterministic under a seeded rng and rolls from SETUP too', () => {
+    const fromSetup = newDraft({
+      leagueId: 'L1',
+      draftId: 'D1',
+      settings: makeSettings({ teams: 6 }),
+      teams: makeTeams(6),
+    });
+    const roll = () =>
+      reduce(fromSetup, { type: 'START_REVEAL', game: 'envelopes' }, { now: 0, rng: seededRng(9) })
+        .state.order;
+    expect(roll()).toEqual(roll());
+    expect(isValidOrder(roll(), 6)).toBe(true);
+  });
+
+  it('REVEAL_DONE → ORDER_SET, preserves the order, clears reveal, bumps version', () => {
+    const revealing = reduce(
+      setupDraft(makeSettings({ teams: 5 })),
+      { type: 'START_REVEAL', game: 'envelopes' },
+      { now: 1000, rng: seededRng(3) },
+    ).state;
+    const { state: next, outbox } = reduce(revealing, { type: 'REVEAL_DONE' }, { now: 90_000 });
+    expect(next.status).toBe('ORDER_SET');
+    expect(next.order).toEqual(revealing.order);
+    expect(next.reveal).toBeUndefined();
+    expect(next.version).toBe(revealing.version + 1);
+    expect(outbox[0]?.type).toBe('SYNC');
+  });
+
+  it('rejects START_REVEAL from a live draft and needs an rng', () => {
+    const live = reduce(setupDraft(makeSettings()), { type: 'START' }, { now: 0 }).state;
+    expect(
+      reduce(live, { type: 'START_REVEAL', game: 'envelopes' }, { now: 0, rng: seededRng(1) })
+        .outbox[0],
+    ).toMatchObject({ type: 'REJECT', payload: { code: 'BAD_STATE' } });
+    expect(
+      reduce(setupDraft(makeSettings()), { type: 'START_REVEAL', game: 'envelopes' }, { now: 0 })
+        .outbox[0],
+    ).toMatchObject({ type: 'REJECT', payload: { code: 'RNG_REQUIRED' } });
+  });
+
+  it('rejects REVEAL_DONE when no reveal is in progress', () => {
+    const orderSet = setupDraft(makeSettings());
+    expect(reduce(orderSet, { type: 'REVEAL_DONE' }, { now: 0 }).outbox[0]).toMatchObject({
+      type: 'REJECT',
+      payload: { code: 'BAD_STATE' },
+    });
+  });
+});
+
+describe('GO_LIVE', () => {
+  it('STARTING → ON_CLOCK, arms the first pick clock, clears liveAt, bumps version', () => {
+    const started = reduce(
+      setupDraft(makeSettings({ mode: 'linear', goLiveCountdownSec: 30 })),
+      { type: 'START' },
+      { now: 1000 },
+    ).state;
+    const { state: next, outbox } = reduce(started, { type: 'GO_LIVE' }, { now: 40_000 });
+    expect(next.status).toBe('ON_CLOCK');
+    expect(next.pointer).toBe(1);
+    expect(next.liveAt).toBeUndefined();
+    expect(next.pickDeadline).toBe(40_000 + 90 * 1000);
+    expect(next.version).toBe(started.version + 1);
+    expect(outbox[0]?.type).toBe('SYNC');
+  });
+
+  it('rejects GO_LIVE when not STARTING', () => {
+    const orderSet = setupDraft(makeSettings({ goLiveCountdownSec: 30 }));
+    const { state: next, outbox } = reduce(orderSet, { type: 'GO_LIVE' }, { now: 1000 });
+    expect(next).toBe(orderSet); // unchanged
     expect(outbox[0]).toMatchObject({ type: 'REJECT', payload: { code: 'BAD_STATE' } });
   });
 });
@@ -448,6 +557,128 @@ describe('SET_ON_CLOCK', () => {
     ).toMatchObject({
       type: 'REJECT',
       payload: { code: 'BAD_STATE' },
+    });
+  });
+});
+
+describe('REASSIGN_PICK', () => {
+  /** A linear 4-team draft with three picks made (slots 1, 2, 3). */
+  function withThreePicks(): DraftState {
+    let s = reduce(
+      setupDraft(makeSettings({ mode: 'linear' })),
+      { type: 'START' },
+      { now: 0 },
+    ).state;
+    s = submit(s, { now: 1 }, 'p1', 'RB').state;
+    s = submit(s, { now: 2 }, 'p2', 'WR').state;
+    s = submit(s, { now: 3 }, 'p3', 'TE').state;
+    return s;
+  }
+
+  it('moves a drafted player to another team without touching order/pointer', () => {
+    const s = withThreePicks();
+    const { state } = reduce(s, { type: 'REASSIGN_PICK', overall: 1, teamSlot: 4 }, { now: 9 });
+    expect(state.picks[0]).toMatchObject({ overall: 1, playerId: 'p1', teamSlot: 4 });
+    expect(state.pointer).toBe(s.pointer);
+    expect(state.order).toEqual(s.order);
+    expect(state.version).toBe(s.version + 1);
+    // Roster derivation follows the new slot.
+    expect(rosterCounts(state, 4)).toEqual({ RB: 1 });
+    expect(rosterCounts(state, 1)).toEqual({});
+  });
+
+  it('rejects a missing pick and an out-of-range slot', () => {
+    const s = withThreePicks();
+    expect(
+      reduce(s, { type: 'REASSIGN_PICK', overall: 99, teamSlot: 2 }, { now: 0 }).outbox[0],
+    ).toMatchObject({ type: 'REJECT', payload: { code: 'PICK_NOT_FOUND' } });
+    expect(
+      reduce(s, { type: 'REASSIGN_PICK', overall: 1, teamSlot: 0 }, { now: 0 }).outbox[0],
+    ).toMatchObject({ type: 'REJECT', payload: { code: 'OUT_OF_RANGE' } });
+    expect(
+      reduce(s, { type: 'REASSIGN_PICK', overall: 1, teamSlot: 5 }, { now: 0 }).outbox[0],
+    ).toMatchObject({ type: 'REJECT', payload: { code: 'OUT_OF_RANGE' } });
+  });
+});
+
+describe('REMOVE_PICK', () => {
+  it('deletes a specific pick, returns the player, and keeps other overalls', () => {
+    let s = reduce(
+      setupDraft(makeSettings({ mode: 'linear' })),
+      { type: 'START' },
+      { now: 0 },
+    ).state;
+    s = submit(s, { now: 1 }, 'p1', 'RB').state;
+    s = submit(s, { now: 2 }, 'p2', 'WR').state;
+    s = submit(s, { now: 3 }, 'p3', 'TE').state; // pointer 4
+    const { state } = reduce(s, { type: 'REMOVE_PICK', overall: 2 }, { now: 9 });
+    expect(state.picks.map((p) => p.overall)).toEqual([1, 3]); // no renumber
+    expect(state.picks.some((p) => p.playerId === 'p2')).toBe(false);
+    expect(state.pointer).toBe(s.pointer); // untouched
+    expect(state.version).toBe(s.version + 1);
+    // p2 is draftable again for the team on the clock (slot 4).
+    const retake = submit(state, { now: 10 }, 'p2', 'WR');
+    expect(retake.outbox[0]?.type).toBe('PICK_MADE');
+  });
+
+  it('rejects removing a missing pick', () => {
+    const s = reduce(setupDraft(makeSettings()), { type: 'START' }, { now: 0 }).state;
+    expect(reduce(s, { type: 'REMOVE_PICK', overall: 1 }, { now: 0 }).outbox[0]).toMatchObject({
+      type: 'REJECT',
+      payload: { code: 'PICK_NOT_FOUND' },
+    });
+  });
+});
+
+describe('REWIND_TO', () => {
+  it('drops the tail, resets pointer/clock, and returns those players to the pool', () => {
+    let s = reduce(
+      setupDraft(makeSettings({ mode: 'linear' })),
+      { type: 'START' },
+      { now: 0 },
+    ).state;
+    s = submit(s, { now: 1 }, 'p1', 'RB').state;
+    s = submit(s, { now: 2 }, 'p2', 'WR').state;
+    s = submit(s, { now: 3 }, 'p3', 'TE').state; // pointer 4, version 4
+    const { state } = reduce(s, { type: 'REWIND_TO', overall: 2 }, { now: 500 });
+    expect(state.picks.map((p) => p.playerId)).toEqual(['p1']);
+    expect(state.pointer).toBe(2);
+    expect(state.status).toBe('ON_CLOCK');
+    expect(state.pickDeadline).toBe(500 + 90 * 1000);
+    expect(state.pendingPick).toBeUndefined();
+    expect(state.version).toBe(s.version + 1);
+    // p2 and p3 are draftable again; p1 stays taken.
+    expect(submit(state, { now: 600 }, 'p2', 'WR').outbox[0]?.type).toBe('PICK_MADE');
+    expect(submit(state, { now: 600 }, 'p1', 'QB').outbox[0]).toMatchObject({
+      type: 'REJECT',
+      payload: { code: 'PLAYER_TAKEN' },
+    });
+  });
+
+  it('clears a stored pause and re-arms a live clock', () => {
+    let s = reduce(
+      setupDraft(makeSettings({ mode: 'linear' })),
+      { type: 'START' },
+      { now: 0 },
+    ).state;
+    s = submit(s, { now: 1 }, 'p1', 'RB').state;
+    s = reduce(s, { type: 'PAUSE' }, { now: 2 }).state;
+    const { state } = reduce(s, { type: 'REWIND_TO', overall: 1 }, { now: 700 });
+    expect(state.picks).toHaveLength(0);
+    expect(state.pointer).toBe(1);
+    expect(state.status).toBe('ON_CLOCK');
+    expect(state.pausedRemainingMs).toBeUndefined();
+  });
+
+  it('rejects out-of-range targets (< 1 or > pointer)', () => {
+    const s = reduce(setupDraft(makeSettings()), { type: 'START' }, { now: 0 }).state; // pointer 1
+    expect(reduce(s, { type: 'REWIND_TO', overall: 0 }, { now: 0 }).outbox[0]).toMatchObject({
+      type: 'REJECT',
+      payload: { code: 'OUT_OF_RANGE' },
+    });
+    expect(reduce(s, { type: 'REWIND_TO', overall: 2 }, { now: 0 }).outbox[0]).toMatchObject({
+      type: 'REJECT',
+      payload: { code: 'OUT_OF_RANGE' },
     });
   });
 });

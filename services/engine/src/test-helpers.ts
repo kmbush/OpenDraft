@@ -39,6 +39,7 @@ export function makeSettings(overrides: Partial<DraftSettings> = {}): DraftSetti
     mode: 'snake',
     timerSec: 90,
     waitingSec: 8,
+    goLiveCountdownSec: 0,
     rosterFormat: TEST_ROSTER,
     ...overrides,
   };

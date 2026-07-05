@@ -87,6 +87,42 @@ describe('draft setup CRUD', () => {
     expect(fetched.body).toMatchObject({ status: 'SETUP', poolSnapshotId: '2026-07-03' });
   });
 
+  it('carries team name/color/owner and defaults omitted fields', async () => {
+    const { deps } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    const created = await handleHttp(
+      deps,
+      req('POST', '/leagues/L1/drafts', {
+        token,
+        body: {
+          settings: minimalSettings(),
+          teams: [
+            { name: 'Gridiron Gang', color: '#3b82f6', ownerLabel: 'Kyle' },
+            { color: 'nope' },
+          ],
+        },
+      }),
+    );
+    expect(created.status).toBe(201);
+    expect((created.body as { teams: unknown }).teams).toEqual([
+      { slot: 1, name: 'Gridiron Gang', color: '#3b82f6', ownerLabel: 'Kyle' },
+      { slot: 2, name: 'Team 2', color: '#64748b' },
+    ]);
+  });
+
+  it('rejects a teams array that does not match settings.teams', async () => {
+    const { deps } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    const res = await handleHttp(
+      deps,
+      req('POST', '/leagues/L1/drafts', {
+        token,
+        body: { settings: minimalSettings(), teams: [{ name: 'Only One' }] },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('404s an unknown route/draft', async () => {
     const { deps } = harness({ hash: HASH });
     expect((await handleHttp(deps, req('GET', '/leagues/L1/drafts/nope'))).status).toBe(404);

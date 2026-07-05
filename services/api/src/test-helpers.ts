@@ -17,6 +17,7 @@ const SETTINGS: DraftSettings = {
   mode: 'linear',
   timerSec: 90,
   waitingSec: 8,
+  goLiveCountdownSec: 0,
   rosterFormat: {
     starters: { QB: 1, RB: 2, WR: 2 },
     flex: [],

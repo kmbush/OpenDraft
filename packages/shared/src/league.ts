@@ -3,14 +3,22 @@
  * (apps/web reads the theme to set CSS custom properties), so they live in shared.
  */
 
-/** Per-league theme tokens, injected as CSS custom properties at load (AD-10). */
+/**
+ * Per-league theme tokens, injected as CSS custom properties at load (AD-10).
+ * Everything is optional: an unset theme (or field) falls back to the amber
+ * brand default, so the app always renders. `accent` is the one control the
+ * setup UI exposes today — it retints the brand accent across every screen.
+ */
 export interface Theme {
-  colors: {
-    primary: string;
-    secondary: string;
-    accent: string;
+  colors?: {
+    primary?: string;
+    secondary?: string;
+    /** The brand accent (`#rrggbb`); retints buttons + accents app-wide. */
+    accent?: string;
   };
-  /** S3 object key for the league logo, served via CloudFront. */
+  /** Inline logo as a URL or a small data-URL. Prod path is S3 via `logoKey` (AD-10, deferred). */
+  logo?: string;
+  /** S3 object key for the league logo, served via CloudFront (deferred). */
   logoKey?: string;
   /** Optional font family token. */
   font?: string;
