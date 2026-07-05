@@ -47,23 +47,26 @@ function applySync(
 }
 
 /**
- * Apply an incremental pick. The message carries the completed pick and the next
- * team's deadline (single-message model, §5.2); we reconstruct the mirror from
- * it without recomputing any ordering.
+ * Apply an incremental pick. The message carries the completed pick, the next
+ * team, and `announceUntil` (the announcement lockout end, §5.2). We enter the
+ * PICK_IN lockout with NO pick clock — the fresh clock arrives with the SYNC the
+ * server sends on ANNOUNCE_DONE — reconstructing the mirror without recomputing
+ * any ordering.
  */
 function applyPickMade(
   state: LiveState,
   message: Extract<OutboundMessage, { type: 'PICK_MADE' }>,
 ): LiveState {
   if (!state.draft) return state;
-  const { pick, nextTeamSlot, nextPickDeadline } = message.payload;
+  const { pick, nextTeamSlot, announceUntil } = message.payload;
   const draft: DraftState = {
     ...state.draft,
     picks: [...state.draft.picks, pick],
     pointer: pick.overall + 1,
     status: nextTeamSlot === null ? 'COMPLETE' : 'PICK_IN',
     pendingPick: pick,
-    ...(nextPickDeadline === null ? {} : { pickDeadline: nextPickDeadline }),
+    pickDeadline: undefined,
+    announceUntil: announceUntil ?? undefined,
     version: message.version ?? state.draft.version,
   };
   const clearOptimistic = state.optimistic?.playerId === pick.playerId;

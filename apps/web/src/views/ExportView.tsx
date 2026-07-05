@@ -42,7 +42,7 @@ function PositionTag({ position }: { position: Position }) {
 }
 
 /** One drafted-player cell, or a quiet placeholder for an unfilled slot. */
-function BoardCell({ pick, name }: { pick: Pick | null; name: string }) {
+function BoardCell({ pick, name, team }: { pick: Pick | null; name: string; team: string }) {
   if (!pick) {
     return (
       <td className="border border-border p-1.5 align-top">
@@ -58,7 +58,10 @@ function BoardCell({ pick, name }: { pick: Pick | null; name: string }) {
           {pick.overall}
         </span>
       </div>
-      <div className="mt-0.5 truncate text-[11px] font-semibold leading-tight">{name}</div>
+      <div className="mt-0.5 truncate text-[11px] font-semibold leading-tight">
+        {name}
+        {team && <span className="ml-1 font-normal text-muted-foreground">{team}</span>}
+      </div>
     </td>
   );
 }
@@ -85,6 +88,7 @@ export function ExportView() {
     const p = byId.get(id);
     return p ? `${p.firstName} ${p.lastName}` : id;
   };
+  const teamOfPlayer = (id: string) => byId.get(id)?.team ?? '';
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -176,6 +180,7 @@ export function ExportView() {
                       key={c}
                       pick={cell}
                       name={cell ? nameOf(cell.playerId) : ''}
+                      team={cell ? teamOfPlayer(cell.playerId) : ''}
                     />
                   ))}
                 </tr>

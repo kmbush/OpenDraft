@@ -1,14 +1,16 @@
 /**
  * Draft board (DESIGN §7): the TV showpiece — a full-bleed, chrome-free,
  * NFL-Draft-broadcast stage. On-the-clock team with a giant countdown ring, an
- * on-deck queue, a live recent-picks rail, and the "THE PICK IS IN" → reveal
- * takeover during the waiting window. Every countdown is rendered from
- * `pickDeadline` corrected by the clock offset — the server never ticks (AD-1).
+ * on-deck queue, a live recent-picks rail, and the locked announcement takeover
+ * after every pick. Every countdown is rendered from a deadline timestamp
+ * corrected by the clock offset — the server never ticks (AD-1).
  *
- * Timing model: during PICK_IN, `pickDeadline = now + waitingSec + timerSec`.
- * The waiting window (the announcement) is the leading `waitingSec`; once it
- * elapses the mirror is still PICK_IN but the pointer + fresh clock already
- * belong to the next team, so we simply render the ON THE CLOCK stage again.
+ * Announcement model: during PICK_IN there is NO pick clock — `announceUntil` is
+ * the epoch ms the hard lockout ends. The board drives a four-beat show off it
+ * (windowStart = announceUntil − waitingSec·1000; elapsed = serverNow − windowStart):
+ * THE PICK IS IN → a beat → the pick announced → ON THE CLOCK: <next team>. When
+ * the server flips PICK_IN → ON_CLOCK (ANNOUNCE_DONE) the fresh pick clock arrives
+ * via SYNC and the live ON THE CLOCK stage takes over.
  */
 import { roundForOverall, slotForOverallPick } from '@opendraft/engine';
 import type { DraftState, Pick, Position } from '@opendraft/shared';
@@ -24,18 +26,21 @@ import { teamColor } from '../lib/teams.js';
 import { useLiveStore } from '../store/store.js';
 import { RevealShow } from './reveal.js';
 
-/** How long the "THE PICK IS IN" takeover holds before the reveal, in ms. */
-const ANNOUNCE_MS = 2200;
+/**
+ * The four announcement beats as fractions of the lockout window, so the show
+ * fills whatever `waitingSec` is (10s default → 3s / 1s / 3.5s / 2.5s):
+ *   pickIn  [0,   0.30)  "THE PICK IS IN"
+ *   pause   [0.30, 0.40) a held beat
+ *   reveal  [0.40, 0.75) the pick announced
+ *   onClock [0.75, 1.0]  "ON THE CLOCK: <next team>"
+ */
+const BEAT_PAUSE = 0.3;
+const BEAT_REVEAL = 0.4;
+const BEAT_ONCLOCK = 0.75;
 
-type Phase =
-  | 'pre'
-  | 'revealing'
-  | 'starting'
-  | 'paused'
-  | 'clock'
-  | 'pickIn'
-  | 'reveal'
-  | 'complete';
+type AnnounceBeat = 'pickIn' | 'pause' | 'reveal' | 'onClock';
+
+type Phase = 'pre' | 'revealing' | 'starting' | 'paused' | 'clock' | 'announcing' | 'complete';
 
 function ordinal(n: number): string {
   const s = ['th', 'st', 'nd', 'rd'];
@@ -358,11 +363,13 @@ function OnDeck({
 function RecentPicks({
   picks,
   playerName,
+  playerTeam,
   teamName,
   colorOf,
 }: {
   picks: Pick[];
   playerName: (id: string) => string;
+  playerTeam: (id: string) => string;
   teamName: (slot: number) => string;
   colorOf: (slot: number) => string;
 }) {
@@ -388,6 +395,11 @@ function RecentPicks({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-lg font-bold leading-tight">
                   {playerName(pick.playerId)}
+                  {playerTeam(pick.playerId) && (
+                    <span className="ml-2 text-sm font-semibold text-white/40">
+                      {playerTeam(pick.playerId)}
+                    </span>
+                  )}
                 </p>
                 <p className="flex items-center gap-1.5 truncate text-sm text-white/45">
                   <TeamDot color={colorOf(pick.teamSlot)} className="h-2 w-2" />
@@ -405,71 +417,159 @@ function RecentPicks({
   );
 }
 
-// --- The pick sequence overlay --------------------------------------------
+// --- The locked announcement takeover -------------------------------------
 
-function PickTakeover({
-  phase,
+/** Beat 1: the confident "THE PICK IS IN" shimmer punch. */
+function PickIsInBeat() {
+  return (
+    <div key="pickIn" className="animate-takeover px-8 text-center">
+      <p
+        className="bg-gradient-to-r from-amber-500 via-yellow-200 to-amber-500 bg-clip-text font-black uppercase leading-[0.9] text-transparent"
+        style={{
+          fontSize: 'clamp(3rem, 13vw, 12rem)',
+          backgroundSize: '250% 100%',
+          animation: 'shimmer 2.4s linear infinite',
+        }}
+      >
+        The Pick
+        <br />
+        Is In
+      </p>
+    </div>
+  );
+}
+
+/** Beat 2: a held beat of anticipation — three breathing dots, tinted to the team. */
+function PauseBeat({ color }: { color: string }) {
+  return (
+    <div key="pause" className="flex items-center gap-5">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="animate-breathe block rounded-full"
+          style={{
+            width: 'clamp(14px, 1.6vw, 26px)',
+            height: 'clamp(14px, 1.6vw, 26px)',
+            backgroundColor: color,
+            boxShadow: `0 0 24px ${color}aa`,
+            animationDelay: `${i * 0.18}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Beat 3: the pick announced — player, position, NFL team — lingering. */
+function RevealBeat({
   pick,
   playerName,
+  playerTeam,
   teamName,
   colorOf,
 }: {
-  phase: 'pickIn' | 'reveal';
   pick: Pick;
   playerName: (id: string) => string;
+  playerTeam: (id: string) => string;
+  teamName: (slot: number) => string;
+  colorOf: (slot: number) => string;
+}) {
+  const nflTeam = playerTeam(pick.playerId);
+  return (
+    <div key="reveal" className="relative w-full">
+      <Confetti />
+      <div className="animate-reveal relative flex flex-col items-center px-8 text-center">
+        <Eyebrow className="text-base md:text-xl" color={colorOf(pick.teamSlot)}>
+          With the {ordinal(pick.overall)} pick, {teamName(pick.teamSlot)} select
+        </Eyebrow>
+        <div className="mt-6 flex items-center gap-5">
+          <PositionBadge
+            position={pick.position}
+            className="h-16 px-4 text-3xl md:h-20 md:text-4xl"
+          />
+          <h1
+            className="font-black uppercase leading-[0.9] tracking-tight"
+            style={{ fontSize: 'clamp(3rem, 9vw, 9rem)' }}
+          >
+            {playerName(pick.playerId)}
+          </h1>
+        </div>
+        <p className="mt-8 text-xl text-white/60 md:text-3xl">
+          {nflTeam && (
+            <>
+              <span className="font-bold text-white">{nflTeam}</span>
+              <span className="mx-3 text-white/25">·</span>
+            </>
+          )}
+          {pick.position}
+          <span className="mx-3 text-white/25">·</span>
+          pick <span className="font-bold text-white">#{pick.overall}</span>
+          <span className="mx-3 text-white/25">·</span>
+          round <span className="font-bold text-white">{pick.round}</span>
+          {pick.auto && (
+            <span className="ml-4 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-4 py-1.5 align-middle text-lg font-bold text-amber-400">
+              <Zap className="h-5 w-5" /> auto
+            </span>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Beat 4: "ON THE CLOCK: <next team>" — same energy as beat 1, in the team's color. */
+function OnClockBeat({ teamName, color }: { teamName: string; color: string }) {
+  return (
+    <div key="onClock" className="animate-takeover px-8 text-center">
+      <Eyebrow className="text-xl md:text-4xl" color={color}>
+        On the Clock
+      </Eyebrow>
+      <p
+        className="mt-6 font-black uppercase leading-[0.9] tracking-tight"
+        style={{ color, fontSize: 'clamp(3rem, 11vw, 11rem)', textShadow: `0 0 60px ${color}88` }}
+      >
+        {teamName}
+      </p>
+    </div>
+  );
+}
+
+/** The full-screen locked takeover; renders the current beat over a blurred stage. */
+function AnnounceTakeover({
+  beat,
+  pick,
+  nextTeamName,
+  nextColor,
+  playerName,
+  playerTeam,
+  teamName,
+  colorOf,
+}: {
+  beat: AnnounceBeat;
+  pick: Pick;
+  nextTeamName: string;
+  nextColor: string;
+  playerName: (id: string) => string;
+  playerTeam: (id: string) => string;
   teamName: (slot: number) => string;
   colorOf: (slot: number) => string;
 }) {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm">
-      {phase === 'pickIn' ? (
-        <div key="pickIn" className="animate-takeover px-8 text-center">
-          <p
-            className="bg-gradient-to-r from-amber-500 via-yellow-200 to-amber-500 bg-clip-text font-black uppercase leading-[0.9] text-transparent"
-            style={{
-              fontSize: 'clamp(3rem, 13vw, 12rem)',
-              backgroundSize: '250% 100%',
-              animation: 'shimmer 2.4s linear infinite',
-            }}
-          >
-            The Pick
-            <br />
-            Is In
-          </p>
-        </div>
+      {beat === 'pickIn' ? (
+        <PickIsInBeat />
+      ) : beat === 'pause' ? (
+        <PauseBeat color={colorOf(pick.teamSlot)} />
+      ) : beat === 'reveal' ? (
+        <RevealBeat
+          pick={pick}
+          playerName={playerName}
+          playerTeam={playerTeam}
+          teamName={teamName}
+          colorOf={colorOf}
+        />
       ) : (
-        <div key="reveal" className="relative w-full">
-          <Confetti />
-          <div className="animate-reveal relative flex flex-col items-center px-8 text-center">
-            <Eyebrow className="text-base md:text-xl" color={colorOf(pick.teamSlot)}>
-              With the {ordinal(pick.overall)} pick, {teamName(pick.teamSlot)} select
-            </Eyebrow>
-            <div className="mt-6 flex items-center gap-5">
-              <PositionBadge
-                position={pick.position}
-                className="h-16 px-4 text-3xl md:h-20 md:text-4xl"
-              />
-              <h1
-                className="font-black uppercase leading-[0.9] tracking-tight"
-                style={{ fontSize: 'clamp(3rem, 9vw, 9rem)' }}
-              >
-                {playerName(pick.playerId)}
-              </h1>
-            </div>
-            <p className="mt-8 text-xl text-white/60 md:text-3xl">
-              drafted by <span className="font-bold text-white">{teamName(pick.teamSlot)}</span>
-              <span className="mx-3 text-white/25">·</span>
-              pick <span className="font-bold text-white">#{pick.overall}</span>
-              <span className="mx-3 text-white/25">·</span>
-              round <span className="font-bold text-white">{pick.round}</span>
-              {pick.auto && (
-                <span className="ml-4 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-4 py-1.5 align-middle text-lg font-bold text-amber-400">
-                  <Zap className="h-5 w-5" /> auto
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
+        <OnClockBeat teamName={nextTeamName} color={nextColor} />
       )}
     </div>
   );
@@ -679,20 +779,30 @@ export function BoardView() {
     const p = byId.get(id);
     return p ? `${p.firstName} ${p.lastName}` : id;
   };
+  const playerTeam = (id: string) => byId.get(id)?.team ?? '';
   const teamName = (slot: number) => teamList.find((t) => t.slot === slot)?.name ?? '—';
   const colorOf = (slot: number) => teamColor(teamList.find((t) => t.slot === slot));
 
-  // Phase derivation. During PICK_IN the announcement runs for the leading
-  // `waitingMs`; after that the pointer + clock already belong to the next team.
-  const announcing = draft.status === 'PICK_IN' && !!draft.pendingPick && remaining > timerMs;
-  const waitElapsed = waitingMs - (remaining - timerMs);
+  // Announcement lockout: no pick clock runs; `announceUntil` bounds the window.
+  // Beats are driven off elapsed fraction so the show fills whatever waitingSec is.
+  const announcing = draft.status === 'PICK_IN' && !!draft.pendingPick;
+  const announceLeft = remainingMs(draft.announceUntil, serverOffsetMs, now);
+  const waitFraction = waitingMs > 0 ? 1 - announceLeft / waitingMs : 1;
+  const beat: AnnounceBeat =
+    waitFraction < BEAT_PAUSE
+      ? 'pickIn'
+      : waitFraction < BEAT_REVEAL
+        ? 'pause'
+        : waitFraction < BEAT_ONCLOCK
+          ? 'reveal'
+          : 'onClock';
   const phase: Phase = ((): Phase => {
     if (draft.status === 'COMPLETE') return 'complete';
     if (draft.status === 'REVEALING') return 'revealing';
     if (draft.status === 'SETUP' || draft.status === 'ORDER_SET') return 'pre';
     if (draft.status === 'STARTING') return 'starting';
     if (draft.status === 'PAUSED') return 'paused';
-    if (announcing) return waitElapsed < ANNOUNCE_MS ? 'pickIn' : 'reveal';
+    if (announcing) return 'announcing';
     return 'clock';
   })();
 
@@ -775,6 +885,7 @@ export function BoardView() {
           <RecentPicks
             picks={recent}
             playerName={playerName}
+            playerTeam={playerTeam}
             teamName={teamName}
             colorOf={colorOf}
           />
@@ -797,14 +908,18 @@ export function BoardView() {
           <RecentPicks
             picks={recent}
             playerName={playerName}
+            playerTeam={playerTeam}
             teamName={teamName}
             colorOf={colorOf}
           />
-          {(phase === 'pickIn' || phase === 'reveal') && draft.pendingPick && (
-            <PickTakeover
-              phase={phase}
+          {phase === 'announcing' && draft.pendingPick && (
+            <AnnounceTakeover
+              beat={beat}
               pick={draft.pendingPick}
+              nextTeamName={onClockSlot ? teamName(onClockSlot) : '—'}
+              nextColor={onClockColor}
               playerName={playerName}
+              playerTeam={playerTeam}
               teamName={teamName}
               colorOf={colorOf}
             />

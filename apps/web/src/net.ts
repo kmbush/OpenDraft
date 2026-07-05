@@ -66,6 +66,27 @@ export function connect(draftId: string, role = 'station'): void {
   };
 }
 
+/**
+ * Tear down the WS cleanly so a finished draft's frames (and the auto-reconnect)
+ * can't bleed into the next draft. Detach handlers first so `close()` doesn't
+ * trip the reconnect timer; the next `connect()` opens a fresh socket.
+ */
+export function disconnect(): void {
+  currentDraftId = null;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (socket) {
+    socket.onopen = null;
+    socket.onclose = null;
+    socket.onmessage = null;
+    socket.close();
+    socket = null;
+  }
+  useLiveStore.getState().setConnected(false);
+}
+
 // --- HTTP (setup/config over TanStack Query; §4.1) ---
 
 async function http<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {

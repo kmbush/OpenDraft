@@ -13,7 +13,7 @@
  */
 import { roundForOverall } from '@opendraft/engine';
 import type { Pick, Player, Position } from '@opendraft/shared';
-import { AlertCircle, Clock, Loader2, Pause, Search, Trophy, X, Zap } from 'lucide-react';
+import { AlertCircle, Clock, Loader2, Lock, Pause, Search, Trophy, X, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppHeader } from '../components/app-header.js';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
@@ -25,8 +25,14 @@ import { indexPlayers, usePool } from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
-import { groupAvailable } from '../lib/pool.js';
+import { groupAvailable, playerMeta } from '../lib/pool.js';
 import { POSITION_COLOR, POSITION_LABEL, positionRank } from '../lib/positions.js';
+import {
+  type RosterSlot,
+  type SlotPick,
+  assignRosterSlots,
+  rosterPositions,
+} from '../lib/roster.js';
 import { readableOn, teamColor } from '../lib/teams.js';
 import { takenIds } from '../store/reducer.js';
 import { useLiveStore } from '../store/store.js';
@@ -168,73 +174,81 @@ function CompleteHero({ picks, rounds }: { picks: number; rounds: number }) {
 
 // --- Roster ----------------------------------------------------------------
 
-interface RosterEntry {
-  key: string | number;
-  name: string;
-  position: Position;
-  pending: boolean;
+/** One roster slot row: the slot label + its player, or a clear empty placeholder. */
+function RosterSlotRow({ slot, name, meta }: { slot: RosterSlot; name: string; meta: string }) {
+  const { pick } = slot;
+  return (
+    <li
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm',
+        pick?.pending
+          ? 'animate-pick-in bg-accent/10'
+          : pick
+            ? 'animate-rise'
+            : 'border border-dashed border-border/70',
+      )}
+    >
+      <span className="w-16 shrink-0 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+        {slot.label}
+      </span>
+      {pick ? (
+        <>
+          <PositionBadge position={pick.position} className="h-6 w-9 text-xs" />
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-medium">{name}</span>
+            {meta && <span className="ml-1.5 text-xs text-muted-foreground">{meta}</span>}
+          </span>
+          {pick.pending && (
+            <Loader2
+              className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground"
+              aria-label="drafting"
+            />
+          )}
+        </>
+      ) : (
+        <span className="flex-1 text-sm text-muted-foreground/50">empty</span>
+      )}
+    </li>
+  );
 }
 
-/** Group a team's picks (+ an optional optimistic pick) by position. */
-function rosterGroups(entries: RosterEntry[]) {
-  const buckets = new Map<Position, RosterEntry[]>();
-  for (const e of entries) {
-    const bucket = buckets.get(e.position);
-    if (bucket) bucket.push(e);
-    else buckets.set(e.position, [e]);
-  }
-  return [...buckets.entries()].sort(([a], [b]) => positionRank(a) - positionRank(b));
-}
-
-function RosterPanel({ entries }: { entries: RosterEntry[] }) {
-  const groups = rosterGroups(entries);
+function RosterPanel({
+  slots,
+  nameOf,
+  metaOf,
+}: {
+  slots: RosterSlot[];
+  nameOf: (id: string) => string;
+  metaOf: (id: string) => string;
+}) {
+  const filled = slots.filter((s) => s.pick).length;
   return (
     <Card className="lg:col-span-1">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Roster</h2>
-        <Badge variant="secondary">{entries.length}</Badge>
+        {slots.length > 0 && (
+          <Badge variant="secondary">
+            {filled}/{slots.length}
+          </Badge>
+        )}
       </div>
       <CardContent className="p-4">
-        {entries.length === 0 ? (
+        {slots.length === 0 ? (
           <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-            No picks yet — they'll appear here as they're drafted.
+            Roster slots appear once a team is on the clock.
           </p>
         ) : (
-          <div className="space-y-4">
-            {groups.map(([position, list]) => (
-              <div key={position}>
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span
-                    className="h-3.5 w-1 rounded-full"
-                    style={{ backgroundColor: POSITION_COLOR[position] }}
-                  />
-                  <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                    {POSITION_LABEL[position]}
-                  </span>
-                </div>
-                <ul className="space-y-1">
-                  {list.map((e) => (
-                    <li
-                      key={e.key}
-                      className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm',
-                        e.pending ? 'animate-pick-in bg-accent/10' : 'animate-rise',
-                      )}
-                    >
-                      <PositionBadge position={e.position} className="h-6 w-9 text-xs" />
-                      <span className="min-w-0 flex-1 truncate font-medium">{e.name}</span>
-                      {e.pending && (
-                        <Loader2
-                          className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground"
-                          aria-label="drafting"
-                        />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+          <ul className="space-y-1">
+            {slots.map((slot, i) => (
+              <RosterSlotRow
+                // biome-ignore lint/suspicious/noArrayIndexKey: slots are a fixed positional list
+                key={i}
+                slot={slot}
+                name={slot.pick ? nameOf(slot.pick.playerId) : ''}
+                meta={slot.pick ? metaOf(slot.pick.playerId) : ''}
+              />
             ))}
-          </div>
+          </ul>
         )}
       </CardContent>
     </Card>
@@ -243,12 +257,73 @@ function RosterPanel({ entries }: { entries: RosterEntry[] }) {
 
 // --- Available pool --------------------------------------------------------
 
+/** A single position (or "All") filter pill above the pool. Grouping cue, never value. */
+function FilterPill({
+  label,
+  active,
+  color,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  color?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide transition-colors',
+        active
+          ? 'border-transparent bg-foreground text-background'
+          : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+      style={active && color ? { backgroundColor: color, color: '#fff' } : undefined}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Row of position filters: [All] + one per position the roster actually uses. */
+function PositionFilterBar({
+  positions,
+  active,
+  onSelect,
+}: {
+  positions: Position[];
+  active: Position | 'ALL';
+  onSelect: (p: Position | 'ALL') => void;
+}) {
+  if (positions.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <FilterPill label="All" active={active === 'ALL'} onClick={() => onSelect('ALL')} />
+      {positions.map((p) => (
+        <FilterPill
+          key={p}
+          label={p}
+          color={POSITION_COLOR[p]}
+          active={active === p}
+          onClick={() => onSelect(p)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PoolPanel({
   status,
   groups,
   totalCount,
   filter,
   onFilter,
+  positions,
+  posFilter,
+  onPosFilter,
+  showBye,
   canPick,
   onDraft,
 }: {
@@ -257,8 +332,12 @@ function PoolPanel({
   totalCount: number;
   filter: string;
   onFilter: (v: string) => void;
+  positions: Position[];
+  posFilter: Position | 'ALL';
+  onPosFilter: (p: Position | 'ALL') => void;
+  showBye: boolean;
   canPick: boolean;
-  onDraft: (id: string, position: Position) => void;
+  onDraft: (player: Player) => void;
 }) {
   return (
     <Card className="lg:col-span-2">
@@ -275,10 +354,10 @@ function PoolPanel({
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search by name…"
+            placeholder="Search by name or team…"
             value={filter}
             onChange={(e) => onFilter(e.target.value)}
-            aria-label="Filter players by name"
+            aria-label="Filter players by name or team"
             className="pl-9 pr-9"
           />
           {filter && (
@@ -292,12 +371,14 @@ function PoolPanel({
             </button>
           )}
         </div>
+        <PositionFilterBar positions={positions} active={posFilter} onSelect={onPosFilter} />
       </div>
       <CardContent className="p-3">
         <PoolBody
           status={status}
           groups={groups}
           filtering={filter.length > 0}
+          showBye={showBye}
           canPick={canPick}
           onDraft={onDraft}
         />
@@ -310,14 +391,16 @@ function PoolBody({
   status,
   groups,
   filtering,
+  showBye,
   canPick,
   onDraft,
 }: {
   status: ReturnType<typeof usePool>['status'];
   groups: ReturnType<typeof groupAvailable>;
   filtering: boolean;
+  showBye: boolean;
   canPick: boolean;
-  onDraft: (id: string, position: Position) => void;
+  onDraft: (player: Player) => void;
 }) {
   if (status === 'none') {
     return (
@@ -374,7 +457,13 @@ function PoolBody({
             </header>
             <ul className="mt-1">
               {group.players.map((player) => (
-                <PlayerRow key={player.id} player={player} canPick={canPick} onDraft={onDraft} />
+                <PlayerRow
+                  key={player.id}
+                  player={player}
+                  showBye={showBye}
+                  canPick={canPick}
+                  onDraft={onDraft}
+                />
               ))}
             </ul>
           </section>
@@ -386,30 +475,86 @@ function PoolBody({
 
 function PlayerRow({
   player,
+  showBye,
   canPick,
   onDraft,
 }: {
   player: Player;
+  showBye: boolean;
   canPick: boolean;
-  onDraft: (id: string, position: Position) => void;
+  onDraft: (player: Player) => void;
 }) {
+  const meta = playerMeta(player, showBye);
   return (
     <li className="group flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted">
       <div className="flex min-w-0 items-center gap-3">
         <PositionBadge position={player.position} className="h-6 w-9 text-xs" />
-        <span className="truncate font-medium">
-          {player.firstName} {player.lastName}
+        <span className="min-w-0 truncate">
+          <span className="font-medium">
+            {player.firstName} {player.lastName}
+          </span>
+          {meta && <span className="ml-2 text-xs text-muted-foreground">{meta}</span>}
         </span>
       </div>
       <Button
         size="sm"
         disabled={!canPick}
-        onClick={() => onDraft(player.id, player.position)}
+        onClick={() => onDraft(player)}
         className="shrink-0 shadow-sm transition-transform active:scale-95 disabled:opacity-40"
       >
         Draft
       </Button>
     </li>
+  );
+}
+
+/** Confirm-before-draft modal (mirrors the admin ConfirmDialog pattern). */
+function DraftConfirmDialog({
+  player,
+  meta,
+  onConfirm,
+  onClose,
+}: {
+  player: Player;
+  meta: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Cancel"
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default bg-black/40"
+      />
+      <Card className="relative w-full max-w-md shadow-lg" role="alertdialog" aria-modal="true">
+        <CardContent className="space-y-4 p-6">
+          <div>
+            <h2 className="text-lg font-black tracking-tight">
+              Draft {player.firstName} {player.lastName}?
+            </h2>
+            <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+              <PositionBadge position={player.position} className="h-5 w-8 text-[11px]" />
+              {meta || POSITION_LABEL[player.position]}
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                onConfirm();
+                onClose();
+              }}
+            >
+              <Zap className="h-4 w-4" /> Draft
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -421,42 +566,59 @@ export function StationView() {
   const pool = usePool(draft?.poolSnapshotId);
   const now = useTicker();
   const [filter, setFilter] = useState('');
+  const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
+  const [confirming, setConfirming] = useState<Player | null>(null);
 
+  const showBye = draft?.settings.showByeWeeks !== false;
   const onClockSlot = state.onClockTeamSlot();
   const onClockTeam = draft?.teams.find((t) => t.slot === onClockSlot) ?? null;
   const taken = useMemo(() => takenIds(state), [state]);
-  const groups = useMemo(
-    () => groupAvailable(pool.players, taken, filter),
-    [pool.players, taken, filter],
-  );
   const byId = useMemo(() => indexPlayers(pool.players), [pool.players]);
+  const nameOf = (id: string): string => {
+    const p = byId.get(id);
+    return p ? `${p.firstName} ${p.lastName}` : id;
+  };
+  const metaOf = (id: string): string => {
+    const p = byId.get(id);
+    return p ? playerMeta(p, showBye) : '';
+  };
 
-  // Roster for the on-clock team, plus the optimistic pick so a draft feels
-  // instant before PICK_MADE reconciles it (§4.1). The pending entry is styled
-  // distinctly and disappears when the authoritative pick arrives.
-  const rosterEntries = useMemo<RosterEntry[]>(() => {
+  // Only offer players the roster can actually hold — a standard (no-IDP) league
+  // hides DL/LB/DB, a no-K/DEF league hides those, etc. (#4).
+  const rosterFormat = draft?.settings.rosterFormat;
+  const allowed = useMemo(
+    () => (rosterFormat ? rosterPositions(rosterFormat) : null),
+    [rosterFormat],
+  );
+  // Filter buttons: [All] + one per position the roster uses, in display order.
+  const filterPositions = useMemo(
+    () => (allowed ? [...allowed].sort((a, b) => positionRank(a) - positionRank(b)) : []),
+    [allowed],
+  );
+  const groups = useMemo(() => {
+    const g = groupAvailable(pool.players, taken, filter).filter(
+      (x) =>
+        (!allowed || allowed.has(x.position)) && (posFilter === 'ALL' || x.position === posFilter),
+    );
+    return g;
+  }, [pool.players, taken, filter, allowed, posFilter]);
+
+  // The on-clock team's picks laid into labeled starter/flex/bench slots, plus the
+  // optimistic pick so a draft fills a slot instantly before PICK_MADE reconciles
+  // it (§4.1). The pending slot is styled distinctly and settles when it arrives.
+  const rosterSlots = useMemo<RosterSlot[]>(() => {
     if (onClockSlot === null || !draft) return [];
-    const picks = draft.picks.filter((p: Pick) => p.teamSlot === onClockSlot);
-    const entries: RosterEntry[] = picks.map((p) => ({
-      key: p.overall,
-      name: byId.get(p.playerId)
-        ? `${byId.get(p.playerId)?.firstName} ${byId.get(p.playerId)?.lastName}`
-        : p.playerId,
-      position: p.position,
-      pending: false,
-    }));
+    const picks: SlotPick[] = draft.picks
+      .filter((p: Pick) => p.teamSlot === onClockSlot)
+      .sort((a, b) => a.overall - b.overall)
+      .map((p) => ({ playerId: p.playerId, position: p.position }));
     if (optimistic && optimistic.teamSlot === onClockSlot) {
       const player = byId.get(optimistic.playerId);
       if (player && !picks.some((p) => p.playerId === optimistic.playerId)) {
-        entries.push({
-          key: `optimistic-${optimistic.playerId}`,
-          name: `${player.firstName} ${player.lastName}`,
-          position: player.position,
-          pending: true,
-        });
+        picks.push({ playerId: optimistic.playerId, position: player.position, pending: true });
       }
     }
-    return entries;
+    return assignRosterSlots(picks, draft.settings.rosterFormat);
   }, [draft, onClockSlot, optimistic, byId]);
 
   if (!draft) {
@@ -471,8 +633,12 @@ export function StationView() {
     );
   }
 
-  const live = draft.status === 'ON_CLOCK' || draft.status === 'PICK_IN';
-  const onClock = live && onClockSlot !== null;
+  // Only ON_CLOCK can draft. PICK_IN is the hard announcement lockout: the pointer
+  // has moved to this station's next team, but the server rejects every pick until
+  // the announcement finishes — so the Draft buttons stay disabled (mirrors the
+  // engine's ANNOUNCING reject).
+  const onClock = draft.status === 'ON_CLOCK' && onClockSlot !== null;
+  const announcing = draft.status === 'PICK_IN';
   const canPick = onClock && !optimistic && pool.status === 'ready';
   const round = onClockSlot ? roundForOverall(draft.pointer, draft.settings.teams) : 0;
   const remaining = remainingMs(draft.pickDeadline, serverOffsetMs, now);
@@ -492,6 +658,12 @@ export function StationView() {
             overall={draft.pointer}
             clockLabel={formatClock(remaining)}
             urgent={remaining <= 10_000}
+          />
+        ) : announcing ? (
+          <WaitingHero
+            icon={<Lock className="h-6 w-6" />}
+            title="The pick is being announced…"
+            subtitle="You're up in a moment — drafting unlocks when the board calls the next team."
           />
         ) : draft.status === 'PAUSED' ? (
           <WaitingHero
@@ -518,18 +690,31 @@ export function StationView() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <RosterPanel entries={rosterEntries} />
+          <RosterPanel slots={rosterSlots} nameOf={nameOf} metaOf={metaOf} />
           <PoolPanel
             status={pool.status}
             groups={groups}
             totalCount={totalCount}
             filter={filter}
             onFilter={setFilter}
+            positions={filterPositions}
+            posFilter={posFilter}
+            onPosFilter={setPosFilter}
+            showBye={showBye}
             canPick={canPick}
-            onDraft={(id, position) => state.submitPick({ id, position })}
+            onDraft={setConfirming}
           />
         </div>
       </div>
+
+      {confirming && (
+        <DraftConfirmDialog
+          player={confirming}
+          meta={playerMeta(confirming, showBye)}
+          onConfirm={() => state.submitPick({ id: confirming.id, position: confirming.position })}
+          onClose={() => setConfirming(null)}
+        />
+      )}
     </Frame>
   );
 }

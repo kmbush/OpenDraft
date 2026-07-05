@@ -13,7 +13,20 @@ export interface PositionGroup {
 
 function matches(player: Player, query: string): boolean {
   if (!query) return true;
-  return `${player.firstName} ${player.lastName}`.toLowerCase().includes(query);
+  const haystack = `${player.firstName} ${player.lastName} ${player.team ?? ''}`.toLowerCase();
+  return haystack.includes(query);
+}
+
+/**
+ * The factual secondary line for a player: team abbr, plus the bye week when
+ * `showBye`. Purely descriptive (never a value signal). Returns '' when there's
+ * nothing to show. e.g. `playerMeta(allen, true) === 'BUF · Bye 7'`.
+ */
+export function playerMeta(player: Player, showBye: boolean): string {
+  const parts: string[] = [];
+  if (player.team) parts.push(player.team);
+  if (showBye && player.bye !== undefined) parts.push(`Bye ${player.bye}`);
+  return parts.join(' · ');
 }
 
 function byName(a: Player, b: Player): number {

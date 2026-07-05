@@ -39,12 +39,12 @@ const syncMsg = (state: DraftState, serverNow: number): OutboundMessage => ({
 const pickMadeMsg = (
   pick: Pick,
   nextTeamSlot: number | null,
-  deadline: number | null,
+  announceUntil: number | null,
   version: number,
 ): OutboundMessage => ({
   type: 'PICK_MADE',
   draftId: 'D1',
-  payload: { pick, nextTeamSlot, nextPickDeadline: deadline },
+  payload: { pick, nextTeamSlot, announceUntil },
   version,
 });
 
@@ -68,7 +68,7 @@ describe('applyInbound: SYNC', () => {
 });
 
 describe('applyInbound: PICK_MADE', () => {
-  it('appends the pick, advances the pointer, and clears a matching optimistic pick', () => {
+  it('appends the pick, advances the pointer, enters the PICK_IN lockout, clears optimistic', () => {
     const base: LiveState = {
       ...initialLiveState,
       draft: draftFixture(),
@@ -78,7 +78,10 @@ describe('applyInbound: PICK_MADE', () => {
     expect(next.draft?.picks.map((p) => p.playerId)).toEqual(['p1']);
     expect(next.draft?.pointer).toBe(2);
     expect(next.draft?.status).toBe('PICK_IN');
-    expect(next.draft?.pickDeadline).toBe(200_000);
+    // The lockout carries no pick clock — announceUntil drives the board, and the
+    // fresh clock arrives with the ANNOUNCE_DONE SYNC.
+    expect(next.draft?.announceUntil).toBe(200_000);
+    expect(next.draft?.pickDeadline).toBeUndefined();
     expect(next.draft?.version).toBe(3);
     expect(next.optimistic).toBeNull();
   });

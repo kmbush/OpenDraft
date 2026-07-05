@@ -17,6 +17,8 @@ interface StoreState extends LiveState {
   setDraftId(id: string): void;
   setAdminToken(token: string | null): void;
   setConnected(connected: boolean): void;
+  /** Drop the current draft + its mirrored live state, back to setup. Keeps the admin session. */
+  resetDraft(): void;
   handleInbound(message: OutboundMessage, clientNow?: number): void;
 
   /** The team slot on the clock right now, or null if the draft isn't live. */
@@ -36,6 +38,7 @@ export const useLiveStore = create<StoreState>((set, get) => ({
   setDraftId: (id) => set({ draftId: id }),
   setAdminToken: (token) => set({ adminToken: token }),
   setConnected: (connected) => set({ connected }),
+  resetDraft: () => set({ draftId: null, connected: false, ...initialLiveState }),
 
   handleInbound: (message, clientNow = Date.now()) => {
     // Only apply messages for the draft this client is watching. The server

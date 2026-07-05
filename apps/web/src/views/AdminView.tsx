@@ -7,14 +7,12 @@
  */
 import { roundForOverall } from '@opendraft/engine';
 import {
-  DEFAULT_ROSTER_PRESET,
   type DraftSettings,
-  IDP_FLEX_ELIGIBILITY,
+  IDP_POSITIONS,
+  OFFENSE_POSITIONS,
   type Pick,
   type Player,
   type Position,
-  type RosterFormat,
-  SUPERFLEX_ELIGIBILITY,
 } from '@opendraft/shared';
 import {
   CheckCircle2,
@@ -22,14 +20,17 @@ import {
   Clock,
   ExternalLink,
   FileDown,
+  FilePlus2,
   GripVertical,
   History,
   Loader2,
   Lock,
+  Minus,
   MonitorPlay,
   Palette,
   Pause,
   Play,
+  Plus,
   Rocket,
   RotateCcw,
   Shuffle,
@@ -52,36 +53,24 @@ import {
 import { Input } from '../components/ui/input.js';
 import { Select } from '../components/ui/select.js';
 import { Separator } from '../components/ui/separator.js';
+import { useLeague } from '../hooks/useLeague.js';
 import { fetchPoolCount, indexPlayers, usePool } from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
 import { POSITION_COLOR } from '../lib/positions.js';
-import { TEAM_COLORS, teamColor, teamColorForSlot } from '../lib/teams.js';
-import { ACCENT_PALETTE, DEFAULT_ACCENT } from '../lib/theme.js';
-import { LEAGUE_ID, api, connect } from '../net.js';
+import { ROSTER_PRESETS, type RosterSpec, buildRosterFormat } from '../lib/roster.js';
+import {
+  DEFAULT_SETUP_SEED,
+  type SetupSeed,
+  type TeamConfig,
+  draftToSetupSeed,
+  resizeTeamConfigs,
+} from '../lib/setupSeed.js';
+import { TEAM_COLORS, teamColor } from '../lib/teams.js';
+import { ACCENT_PALETTE } from '../lib/theme.js';
+import { LEAGUE_ID, api, connect, disconnect } from '../net.js';
 import { useLiveStore } from '../store/store.js';
-
-const ROSTER_PRESETS: Record<string, RosterFormat> = {
-  standard: DEFAULT_ROSTER_PRESET,
-  superflex: {
-    ...DEFAULT_ROSTER_PRESET,
-    flex: [
-      ...DEFAULT_ROSTER_PRESET.flex,
-      { kind: 'SUPERFLEX', eligible: [...SUPERFLEX_ELIGIBILITY], count: 1 },
-    ],
-    positionMax: { ...DEFAULT_ROSTER_PRESET.positionMax, QB: 6 },
-  },
-  idp: {
-    ...DEFAULT_ROSTER_PRESET,
-    starters: { ...DEFAULT_ROSTER_PRESET.starters, DL: 1, LB: 1, DB: 1 },
-    flex: [
-      ...DEFAULT_ROSTER_PRESET.flex,
-      { kind: 'IDP_FLEX', eligible: [...IDP_FLEX_ELIGIBILITY], count: 1 },
-    ],
-    positionMax: { ...DEFAULT_ROSTER_PRESET.positionMax, DL: 6, LB: 6, DB: 6 },
-  },
-};
 
 function shuffle(n: number): number[] {
   const slots = Array.from({ length: n }, (_, i) => i + 1);
@@ -97,8 +86,11 @@ const LINK_BUTTON =
 
 export function AdminView() {
   const { draft, adminToken } = useLiveStore();
+  // Carries a finished draft's config across the Controls → Setup switch so the
+  // next draft's form is pre-filled (null = first-run defaults).
+  const [seed, setSeed] = useState<SetupSeed | null>(null);
   if (!adminToken) return <Login />;
-  return draft ? <Controls /> : <Setup />;
+  return draft ? <Controls onNewDraft={setSeed} /> : <Setup seed={seed ?? DEFAULT_SETUP_SEED} />;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -164,13 +156,6 @@ function Login() {
   );
 }
 
-/** Editable identity for one team in the setup form (name/color/owner). */
-interface TeamConfig {
-  name: string;
-  color: string;
-  ownerLabel: string;
-}
-
 /** Max inline-logo size — kept small since it rides in the league META item. */
 const MAX_LOGO_BYTES = 40_000;
 
@@ -187,16 +172,6 @@ function readLogoFile(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
-const newTeamConfig = (slot: number): TeamConfig => ({
-  name: '',
-  color: teamColorForSlot(slot),
-  ownerLabel: '',
-});
-
-/** Grow/shrink the config list to `n`, preserving existing rows and their edits. */
-const resizeTeamConfigs = (rows: TeamConfig[], n: number): TeamConfig[] =>
-  Array.from({ length: n }, (_, i) => rows[i] ?? newTeamConfig(i + 1));
 
 /** One compact row: slot, color swatch (click to repick), name, optional owner. */
 function TeamRow({
@@ -267,23 +242,179 @@ function TeamRow({
   );
 }
 
-function Setup() {
+/** A compact −/value/+ counter used across the roster editor. */
+function Stepper({
+  label,
+  value,
+  onChange,
+  color,
+  min = 0,
+  max = 9,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  color?: string;
+  min?: number;
+  max?: number;
+}) {
+  const set = (v: number) => onChange(Math.max(min, Math.min(max, v)));
+  return (
+    <div className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5">
+      <span className="flex items-center gap-1.5 text-sm font-medium">
+        {color && (
+          <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: color }} aria-hidden />
+        )}
+        {label}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          aria-label={`Decrease ${label}`}
+          onClick={() => set(value - 1)}
+          disabled={value <= min}
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <span className="w-6 text-center text-sm font-bold tabular-nums">{value}</span>
+        <button
+          type="button"
+          aria-label={`Increase ${label}`}
+          onClick={() => set(value + 1)}
+          disabled={value >= max}
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted disabled:opacity-30"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Full roster editor: preset buttons prefill steppers for starters, flex, and bench. */
+function RosterEditor({
+  spec,
+  onChange,
+}: {
+  spec: RosterSpec;
+  onChange: (spec: RosterSpec) => void;
+}) {
+  const setStarter = (pos: Position, v: number) =>
+    onChange({ ...spec, starters: { ...spec.starters, [pos]: v } });
+  const format = buildRosterFormat(spec);
+  const starterCount = Object.values(format.starters).reduce((n, c) => n + (c ?? 0), 0);
+  const flexCount = format.flex.reduce((n, f) => n + f.count, 0);
+  const total = starterCount + flexCount + spec.bench;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Users className="h-4 w-4" /> Roster format
+        </CardTitle>
+        <CardDescription>
+          Start from a preset, then tune each slot. {starterCount + flexCount} starters ·{' '}
+          {spec.bench} bench · {total} total.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {ROSTER_PRESETS.map((p) => (
+            <Button key={p.key} variant="outline" size="sm" onClick={() => onChange(p.spec)}>
+              {p.label}
+            </Button>
+          ))}
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Starters
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {OFFENSE_POSITIONS.map((pos) => (
+              <Stepper
+                key={pos}
+                label={pos}
+                color={POSITION_COLOR[pos]}
+                value={spec.starters[pos]}
+                onChange={(v) => setStarter(pos, v)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Flex
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Stepper
+              label="FLEX"
+              value={spec.flex}
+              onChange={(v) => onChange({ ...spec, flex: v })}
+            />
+            <Stepper
+              label="SUPERFLEX"
+              value={spec.superflex}
+              onChange={(v) => onChange({ ...spec, superflex: v })}
+            />
+            <Stepper
+              label="IDP FLEX"
+              value={spec.idpFlex}
+              onChange={(v) => onChange({ ...spec, idpFlex: v })}
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            IDP starters <span className="normal-case opacity-70">(optional)</span>
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {IDP_POSITIONS.map((pos) => (
+              <Stepper
+                key={pos}
+                label={pos}
+                color={POSITION_COLOR[pos]}
+                value={spec.starters[pos]}
+                onChange={(v) => setStarter(pos, v)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Stepper
+            label="Bench (BN)"
+            value={spec.bench}
+            onChange={(v) => onChange({ ...spec, bench: v })}
+            max={20}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Setup({ seed }: { seed: SetupSeed }) {
   const store = useLiveStore();
-  const [name, setName] = useState('My League');
-  const [teams, setTeams] = useState(10);
-  const [teamRows, setTeamRows] = useState<TeamConfig[]>(() => resizeTeamConfigs([], 10));
-  const [rounds, setRounds] = useState(15);
-  const [mode, setMode] = useState<'snake' | 'linear'>('snake');
-  const [timerSec, setTimerSec] = useState(90);
-  const [waitingSec, setWaitingSec] = useState(8);
-  const [goLiveCountdownSec, setGoLiveCountdownSec] = useState(30);
-  const [preset, setPreset] = useState<keyof typeof ROSTER_PRESETS>('standard');
-  const [poolSnapshotId, setPoolSnapshotId] = useState('bundled');
+  const [name, setName] = useState(seed.name);
+  const [teams, setTeams] = useState(seed.teams);
+  const [teamRows, setTeamRows] = useState<TeamConfig[]>(seed.teamRows);
+  const [rounds, setRounds] = useState(seed.rounds);
+  const [mode, setMode] = useState<'snake' | 'linear'>(seed.mode);
+  const [timerSec, setTimerSec] = useState(seed.timerSec);
+  const [waitingSec, setWaitingSec] = useState(seed.waitingSec);
+  const [goLiveCountdownSec, setGoLiveCountdownSec] = useState(seed.goLiveCountdownSec);
+  const [showByeWeeks, setShowByeWeeks] = useState(seed.showByeWeeks);
+  const [roster, setRoster] = useState<RosterSpec>(seed.roster);
+  const [poolSnapshotId, setPoolSnapshotId] = useState(seed.poolSnapshotId);
   const [poolCount, setPoolCount] = useState<number | null>(null);
   const [poolChecking, setPoolChecking] = useState(false);
-  const [accent, setAccent] = useState(DEFAULT_ACCENT);
-  const [logoUrl, setLogoUrl] = useState('');
-  const [logoData, setLogoData] = useState('');
+  const [accent, setAccent] = useState(seed.accent);
+  const [logoUrl, setLogoUrl] = useState(seed.logoUrl);
+  const [logoData, setLogoData] = useState(seed.logoData);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,7 +473,8 @@ function Setup() {
         timerSec,
         waitingSec,
         goLiveCountdownSec,
-        rosterFormat: ROSTER_PRESETS[preset] ?? DEFAULT_ROSTER_PRESET,
+        showByeWeeks,
+        rosterFormat: buildRosterFormat(roster),
       };
       const teamsPayload = teamRows.map((r, i) => ({
         name: r.name.trim() || `Team ${i + 1}`,
@@ -395,16 +527,6 @@ function Setup() {
                 <option value="linear">Linear</option>
               </Select>
             </Field>
-            <Field label="Roster preset">
-              <Select
-                value={preset}
-                onChange={(e) => setPreset(e.target.value as keyof typeof ROSTER_PRESETS)}
-              >
-                <option value="standard">Standard</option>
-                <option value="superflex">Superflex</option>
-                <option value="idp">IDP</option>
-              </Select>
-            </Field>
             <Field label="Pick timer (seconds)">
               <Input
                 type="number"
@@ -455,8 +577,25 @@ function Setup() {
               </AlertDescription>
             </Alert>
           )}
+
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={showByeWeeks}
+              onChange={(e) => setShowByeWeeks(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-accent"
+            />
+            <span>
+              <span className="font-medium">Show bye weeks</span>
+              <span className="ml-1 text-muted-foreground">
+                — display each player's bye on the station.
+              </span>
+            </span>
+          </label>
         </CardContent>
       </Card>
+
+      <RosterEditor spec={roster} onChange={setRoster} />
 
       <Card>
         <CardHeader>
@@ -775,10 +914,11 @@ function TeamColumn({
   );
 }
 
-function Controls() {
+function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
   const store = useLiveStore();
   const draft = store.draft;
   const draftId = store.draftId;
+  const league = useLeague();
   const pool = usePool(draft?.poolSnapshotId);
   const now = useTicker();
   const [orderText, setOrderText] = useState('');
@@ -799,6 +939,7 @@ function Controls() {
   const totalPicks = teams * rounds;
   const suffix = draftId ? `?draft=${draftId}` : '';
   const preStart = draft.status === 'SETUP' || draft.status === 'ORDER_SET';
+  const complete = draft.status === 'COMPLETE';
   const revealing = draft.status === 'REVEALING';
   const starting = draft.status === 'STARTING';
   const live = draft.status === 'ON_CLOCK' || draft.status === 'PICK_IN';
@@ -871,6 +1012,26 @@ function Controls() {
     if (Number.isInteger(n) && n >= 1 && n <= lastOverall) confirmRewind(n);
   };
 
+  // Back to Setup for the next draft: snapshot this draft's config as the form
+  // seed, tear the WS down so the old (finished) draft can't bleed in, drop the
+  // mirror + saved draftId, and keep the admin signed in. The old draft is
+  // untouched — still viewable/exportable at /export?draft=<oldId>.
+  const startNewDraft = () => {
+    const nextSeed = draftToSetupSeed(draft, league);
+    disconnect();
+    localStorage.removeItem('opendraft.draftId');
+    store.resetDraft();
+    onNewDraft(nextSeed);
+  };
+
+  const confirmNewDraft = () =>
+    setConfirm({
+      title: 'Start a new draft?',
+      description: 'The finished draft stays saved and exportable; this returns you to setup.',
+      confirmLabel: 'Start a new draft',
+      onConfirm: startNewDraft,
+    });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -892,6 +1053,11 @@ function Controls() {
           <a href={`/export${suffix}`} target="_blank" rel="noreferrer" className={LINK_BUTTON}>
             <FileDown className="h-4 w-4" /> Export board <ExternalLink className="h-3.5 w-3.5" />
           </a>
+          {complete && (
+            <Button onClick={confirmNewDraft}>
+              <FilePlus2 className="h-4 w-4" /> Start a new draft
+            </Button>
+          )}
         </div>
       </div>
 
