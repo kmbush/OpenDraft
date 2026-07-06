@@ -1,7 +1,9 @@
 /**
  * Roster legality helpers (DESIGN AD-11). Per-team position counts are derived
  * from the append-only pick log — never stored separately — so undo/edit stay
- * correct for free. A position absent from `positionMax` is treated as uncapped.
+ * correct for free. `positionMax` defines the roster: a position absent from it
+ * is NOT part of this roster and is never draftable (e.g. an IDP has no slot in a
+ * standard roster, so it must never be auto-picked).
  */
 import type { DraftState, PlayerRef, Position, RosterFormat } from '@opendraft/shared';
 
@@ -26,7 +28,7 @@ export function hasCapacity(
   format: RosterFormat,
 ): boolean {
   const max = format.positionMax[position];
-  if (max === undefined) return true;
+  if (max === undefined) return false; // position not in this roster — never draftable
   return (counts[position] ?? 0) < max;
 }
 

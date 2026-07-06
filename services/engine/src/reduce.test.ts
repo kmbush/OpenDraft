@@ -414,6 +414,37 @@ describe('TIMER_EXPIRE auto-pick (AD-11)', () => {
     expect(run()).toBe(run());
   });
 
+  it('never auto-picks an off-roster position (an IDP has no slot in this roster)', () => {
+    const withIdp = pool([
+      ['rb1', 'RB'],
+      ['wr1', 'WR'],
+      ['dl1', 'DL'], // no DL/LB/DB slot in capRoster -> must never be auto-picked
+      ['lb1', 'LB'],
+      ['db1', 'DB'],
+    ]);
+    for (let seed = 0; seed < 40; seed++) {
+      const { state } = reduce(
+        stateWithCappedQb(),
+        { type: 'TIMER_EXPIRE', available: withIdp },
+        { now: 5000, rng: seededRng(seed) },
+      );
+      expect(['DL', 'LB', 'DB']).not.toContain(state.pendingPick?.position);
+    }
+  });
+
+  it('rejects rather than fall back to an off-roster player when only IDPs remain', () => {
+    const onlyIdp = pool([
+      ['dl1', 'DL'],
+      ['lb1', 'LB'],
+    ]);
+    const { outbox } = reduce(
+      stateWithCappedQb(),
+      { type: 'TIMER_EXPIRE', available: onlyIdp },
+      { now: 5000, rng: seededRng(1) },
+    );
+    expect(outbox[0]?.type).toBe('REJECT');
+  });
+
   it('never auto-picks an already-taken player', () => {
     const withTaken = pool([
       ['qb0', 'QB'], // already drafted in the fixture

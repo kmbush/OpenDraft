@@ -210,9 +210,14 @@ function timerExpire(
     return reject(state, 'NO_LEGAL_PLAYERS', 'No available players to auto-pick.');
   }
   const counts = rosterCounts(state, slot);
-  const legal = legalCandidates(available, counts, state.settings.rosterFormat);
-  // Fall back to any available player if every position is capped (AD-11 edge case).
-  const pool = legal.length > 0 ? legal : available;
+  const format = state.settings.rosterFormat;
+  // Only positions this roster actually uses are draftable — never auto-pick an
+  // IDP (or any off-roster position) for a roster that has no slot for it.
+  const rosterEligible = available.filter((p) => (format.positionMax[p.position] ?? 0) > 0);
+  const legal = legalCandidates(rosterEligible, counts, format);
+  // Fall back to any roster-eligible player (bench overflow) if every position is
+  // capped — but NEVER to an off-roster position (AD-11 edge case).
+  const pool = legal.length > 0 ? legal : rosterEligible;
   const chosen = pool[Math.floor(ctx.rng() * pool.length)] ?? pool[0];
   if (!chosen) return reject(state, 'NO_LEGAL_PLAYERS', 'No available players to auto-pick.');
   return applyPick(state, slot, chosen.id, chosen.position, true, ctx.now);
