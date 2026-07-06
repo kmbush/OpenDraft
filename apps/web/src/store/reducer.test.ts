@@ -125,3 +125,14 @@ describe('takenIds', () => {
     expect([...takenIds(state)].sort()).toEqual(['a', 'b']);
   });
 });
+
+describe('applyInbound: unexpected frames (defensive)', () => {
+  it('an unknown / type-less frame leaves the mirror untouched (never undefined)', () => {
+    const base: LiveState = { ...initialLiveState, draft: draftFixture() };
+    // e.g. an API Gateway control frame: {"message":"Internal server error"} — no `type`.
+    // Zustand v5 replaces the store on a non-object return, so the reducer must
+    // return `state` (not undefined) or every screen white-screens.
+    const bogus = { message: 'Internal server error' } as unknown as OutboundMessage;
+    expect(applyInbound(base, bogus, 0)).toBe(base);
+  });
+});

@@ -106,13 +106,14 @@ export async function dispatchAction(
 }
 
 /**
- * Handle a non-admin `TIMER_NUDGE` (AD-1). The transition itself fans out to
- * everyone (PICK_MADE / SYNC), so success needs no separate ack. Only the two
- * retry-able rejections go back to the nudging connection:
- *   - `TOO_EARLY`: the server's clock hasn't reached the deadline — keep waiting.
- *   - `STALE_VERSION`: another screen's nudge (or a pick) already committed.
- * A nudge that lands when the draft is no longer in a timed state is ignored
- * silently — the client is corrected by the fan-out it will receive.
+ * Handle a non-admin `TIMER_NUDGE` (AD-1). The transition fans out to everyone
+ * (PICK_MADE / SYNC), so **only `TOO_EARLY` is acked** — it tells the nudging
+ * client to keep waiting (the store swallows it). Every other outcome is silent:
+ *   - success / `not_timed`: nothing to report.
+ *   - a lost race (`stale_version`): another screen's nudge already committed —
+ *     the winning broadcast corrects this client. Do NOT send `STALE_VERSION`
+ *     here, or with multiple screens open it surfaces as if the USER's pick was
+ *     rejected ("draft advanced concurrently"). A nudge is not a user action.
  */
 async function handleNudge(
   deps: Deps,
@@ -120,14 +121,8 @@ async function handleNudge(
   draftId: string,
 ): Promise<void> {
   const result = await advanceTimedState(deps, draftId, { source: 'nudge' });
-  if (result.ok || result.reason === 'not_timed') return;
-  if (result.reason === 'too_early') {
-    await ackSender(
-      makeReject(draftId, 'TOO_EARLY', 'Too early — clock not expired', result.currentVersion),
-    );
-    return;
-  }
+  if (result.ok || result.reason !== 'too_early') return;
   await ackSender(
-    makeReject(draftId, 'STALE_VERSION', 'Draft advanced concurrently', result.currentVersion),
+    makeReject(draftId, 'TOO_EARLY', 'Too early — clock not expired', result.currentVersion),
   );
 }

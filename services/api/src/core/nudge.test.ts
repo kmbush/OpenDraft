@@ -95,7 +95,7 @@ describe('ON_CLOCK grace buffer (AD-11)', () => {
 });
 
 describe('concurrent nudges (version guard dedupe)', () => {
-  it('two simultaneous nudges → exactly one commit, the loser gets STALE_VERSION', async () => {
+  it('two simultaneous nudges → exactly one commit; the loser is silent (no reject)', async () => {
     h.persistence.seed(liveDraft()); // past deadline for both
     await Promise.all([nudge('c1'), nudge('c2')]);
 
@@ -103,10 +103,13 @@ describe('concurrent nudges (version guard dedupe)', () => {
     expect(stored().version).toBe(3);
     expect(stored().picks).toHaveLength(1);
 
-    // One auto-pick fanned out (to c1 and c2); exactly one STALE_VERSION loser.
+    // One auto-pick fanned out (to c1 and c2). The loser's nudge lost the version
+    // race and gets NO reject — a nudge is not a user action, and surfacing
+    // STALE_VERSION would read as if the user's pick was rejected. The winning
+    // PICK_MADE broadcast corrects the loser.
     const pickMades = h.broadcaster.sent.filter((s) => s.message.type === 'PICK_MADE');
     expect(pickMades).toHaveLength(2);
-    expect(rejectsOfCode('STALE_VERSION')).toHaveLength(1);
+    expect(rejectsOfCode('STALE_VERSION')).toHaveLength(0);
     expect(rejectsOfCode('TOO_EARLY')).toHaveLength(0);
   });
 });

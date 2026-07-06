@@ -65,8 +65,14 @@ export function connect(draftId: string, role = 'station'): void {
   };
   socket.onmessage = (event) => {
     try {
-      const message = JSON.parse(String(event.data)) as OutboundMessage;
-      useLiveStore.getState().handleInbound(message);
+      const parsed = JSON.parse(String(event.data)) as { type?: unknown };
+      // Only dispatch real server messages. API Gateway control/error frames
+      // (e.g. {"message":"Internal server error"}) carry no `type` — drop them so
+      // they can't reach the store reducer at all (belt-and-suspenders alongside
+      // the reducer's own default case).
+      if (parsed && typeof parsed.type === 'string') {
+        useLiveStore.getState().handleInbound(parsed as OutboundMessage);
+      }
     } catch {
       // ignore malformed frames
     }

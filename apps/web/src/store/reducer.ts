@@ -102,6 +102,12 @@ export function applyInbound(
       return applyPickMade(state, message);
     case 'REJECT':
       return applyReject(state, message);
+    default:
+      // Defensive: an unexpected frame — e.g. an API Gateway control/error frame
+      // like {"message":"Internal server error"} — must never corrupt the mirror.
+      // Zustand v5 REPLACES the store when set() returns a non-object, so a bare
+      // `undefined` here would white-screen every screen. Always return `state`.
+      return state;
   }
 }
 

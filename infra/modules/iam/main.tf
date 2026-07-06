@@ -127,6 +127,15 @@ data "aws_iam_policy_document" "ws_action" {
     resources = [var.ws_manage_connections_arn]
   }
 
+  # The client-nudge auto-pick (TIMER_EXPIRE) runs in this Lambda and loads the
+  # pool to compute available players (DESIGN AD-1/AD-11), so it needs pool read
+  # just like the autopick backstop.
+  statement {
+    sid       = "ReadPool"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.pool_bucket_arn}/${var.pool_prefix}*"]
+  }
+
   statement {
     sid       = "ReadSecrets"
     actions   = ["ssm:GetParameter"]
