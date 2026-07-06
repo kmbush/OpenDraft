@@ -20,6 +20,7 @@ export class FakePersistence implements Persistence {
   leagues = new Map<string, LeagueMeta>();
   connections: ConnectionRecord[] = [];
   authAttempts = 0;
+  private authWindowEnd = 0;
 
   private draftKey(leagueId: string, draftId: string): string {
     return `${leagueId}#${draftId}`;
@@ -67,8 +68,19 @@ export class FakePersistence implements Persistence {
     return this.connections.filter((c) => c.leagueId === leagueId).map((c) => ({ ...c }));
   }
 
-  async registerAuthAttempt(): Promise<number> {
-    this.authAttempts += 1;
+  async getAuthAttempts(_leagueId: string, now: number): Promise<number> {
+    // Elapsed window reads as a fresh 0 (mirrors the adapter's window-aware read).
+    return this.authWindowEnd <= Math.floor(now / 1000) ? 0 : this.authAttempts;
+  }
+
+  async registerAuthAttempt(_leagueId: string, now: number, windowSec: number): Promise<number> {
+    const nowSec = Math.floor(now / 1000);
+    if (this.authWindowEnd <= nowSec) {
+      this.authAttempts = 1;
+      this.authWindowEnd = nowSec + windowSec;
+    } else {
+      this.authAttempts += 1;
+    }
     return this.authAttempts;
   }
 }

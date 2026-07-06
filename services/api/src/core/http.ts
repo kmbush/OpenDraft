@@ -103,17 +103,21 @@ async function adminSession(deps: Deps, req: HttpRequest): Promise<HttpResponse>
   if (!body || typeof body.passcode !== 'string')
     return err(400, 'BAD_REQUEST', 'passcode required');
 
-  const attempts = await deps.persistence.registerAuthAttempt(
-    deps.env.leagueId,
-    deps.env.now(),
-    deps.env.authWindowSec,
-  );
-  if (attempts > deps.env.authMaxAttempts) {
+  // Window-aware lockout check up front: an elapsed window reads as 0, so a few
+  // mistyped passcodes can't lock the commissioner out for hours while TTL lags
+  // (AD-8). The counter is not bumped here — only failures below count.
+  const attempts = await deps.persistence.getAuthAttempts(deps.env.leagueId, deps.env.now());
+  if (attempts >= deps.env.authMaxAttempts) {
     return err(429, 'RATE_LIMITED', 'Too many attempts, try again later');
   }
 
   const { verifyPasscode, issueSession } = await import('./auth.js');
   if (!(await verifyPasscode(deps.secrets, body.passcode))) {
+    await deps.persistence.registerAuthAttempt(
+      deps.env.leagueId,
+      deps.env.now(),
+      deps.env.authWindowSec,
+    );
     return err(401, 'UNAUTHORIZED', 'Invalid passcode');
   }
   const session = await issueSession(

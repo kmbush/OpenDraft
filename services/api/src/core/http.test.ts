@@ -54,6 +54,39 @@ describe('POST /admin/session', () => {
     );
     expect(limited.status).toBe(429);
   });
+
+  it('does not count successful logins toward the lockout', async () => {
+    const { deps } = harness({ hash: HASH });
+    // Far more successes than authMaxAttempts (5) — none should ever rate-limit.
+    for (let i = 0; i < 20; i++) {
+      const res = await handleHttp(
+        deps,
+        req('POST', '/admin/session', { body: { passcode: 'letmein' } }),
+      );
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('resets the lockout once the attempt window elapses (does not wait on TTL)', async () => {
+    let clock = 1_000_000; // ms
+    const { deps } = harness({ hash: HASH, env: { now: () => clock, authWindowSec: 900 } });
+
+    for (let i = 0; i < 5; i++) {
+      await handleHttp(deps, req('POST', '/admin/session', { body: { passcode: 'x' } }));
+    }
+    expect(
+      (await handleHttp(deps, req('POST', '/admin/session', { body: { passcode: 'x' } }))).status,
+    ).toBe(429);
+
+    // Advance past the 900s window: the counter reads as a fresh 0, so a correct
+    // passcode works again — the commissioner is not locked out for hours.
+    clock += 901_000;
+    const after = await handleHttp(
+      deps,
+      req('POST', '/admin/session', { body: { passcode: 'letmein' } }),
+    );
+    expect(after.status).toBe(200);
+  });
 });
 
 describe('draft setup CRUD', () => {

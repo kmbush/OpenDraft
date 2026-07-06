@@ -43,8 +43,11 @@ export interface Persistence {
   deleteConnection(leagueId: string, connectionId: string): Promise<void>;
   listConnections(leagueId: string): Promise<ConnectionRecord[]>;
 
-  /** Atomically bump the passcode-attempt counter in a TTL window; returns the
-   * new count so the caller can rate-limit (AD-8). */
+  /** Window-aware read of the passcode-attempt counter; an elapsed window reads
+   * as 0 without trusting TTL's physical deletion (which lags ~48h) (AD-8). */
+  getAuthAttempts(leagueId: string, now: number): Promise<number>;
+  /** Record one failed passcode attempt, opening/extending a TTL window; returns
+   * the new count. Only failures are recorded — successes never count (AD-8). */
   registerAuthAttempt(leagueId: string, now: number, windowSec: number): Promise<number>;
 }
 

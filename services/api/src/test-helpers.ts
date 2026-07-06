@@ -9,7 +9,7 @@ import {
   SpyBroadcaster,
   fakeEnv,
 } from './fakes.js';
-import type { Deps } from './ports.js';
+import type { Deps, Environment } from './ports.js';
 
 const SETTINGS: DraftSettings = {
   teams: 2,
@@ -58,7 +58,9 @@ export interface Harness {
 }
 
 /** Build a Deps wired to fakes, with two connections (station c1, board c2). */
-export function harness(options: { hash?: string; key?: string } = {}): Harness {
+export function harness(
+  options: { hash?: string; key?: string; env?: Partial<Environment> } = {},
+): Harness {
   const persistence = new FakePersistence();
   const broadcaster = new SpyBroadcaster();
   const scheduler = new FakeScheduler();
@@ -70,6 +72,13 @@ export function harness(options: { hash?: string; key?: string } = {}): Harness 
     { connectionId: 'c2', leagueId: 'L1', role: 'board', connectedAt: 0 },
   );
 
-  const deps: Deps = { persistence, broadcaster, scheduler, pool, secrets, env: fakeEnv() };
+  const deps: Deps = {
+    persistence,
+    broadcaster,
+    scheduler,
+    pool,
+    secrets,
+    env: fakeEnv(options.env),
+  };
   return { deps, persistence, broadcaster, scheduler, secrets };
 }
