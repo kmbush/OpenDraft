@@ -9,6 +9,12 @@ import { idbGet, idbPut } from '../lib/idb.js';
 
 const memory = new Map<string, PoolSnapshot>();
 
+/**
+ * Pool base URL (§4.6). Unset → the dev proxy at `/pool`; a deployed build sets
+ * this to CloudFront `/pools` (note the prefix — infra serves the plural path).
+ */
+const POOL_BASE = import.meta.env.VITE_POOL_BASE ?? '/pool';
+
 async function loadPool(snapshotId: string): Promise<PoolSnapshot> {
   const cached = memory.get(snapshotId);
   if (cached) return cached;
@@ -19,7 +25,12 @@ async function loadPool(snapshotId: string): Promise<PoolSnapshot> {
     return stored;
   }
 
-  const res = await fetch(`/pool/${snapshotId}.json`);
+  const res = await fetch(`${POOL_BASE}/${snapshotId}.json`);
+  // Guard against a 200 SPA-fallback (`index.html`): fail loudly rather than
+  // choke inside `res.json()` on HTML.
+  if (!res.ok || !res.headers.get('content-type')?.includes('json')) {
+    throw new Error(`pool ${snapshotId} unavailable (HTTP ${res.status})`);
+  }
   const snapshot = (await res.json()) as PoolSnapshot;
   memory.set(snapshotId, snapshot);
   void idbPut(snapshotId, snapshot);

@@ -1,3 +1,26 @@
+# --- Web build config (VITE_*) -----------------------------------------------
+# These five feed the apps/web build 1:1. A deploy script maps:
+#   http_api_endpoint -> VITE_HTTP_BASE
+#   ws_client_url     -> VITE_WS_URL
+#   pool_base_url     -> VITE_POOL_BASE
+#   web_url           -> app origin (also the API's CORS allow-list)
+#   league_id         -> VITE_LEAGUE_ID
+
+output "web_url" {
+  description = "VITE app origin — where the browser loads OpenDraft (custom domain if set, else CloudFront)."
+  value       = local.web_base_url
+}
+
+output "pool_base_url" {
+  description = "VITE_POOL_BASE — CloudFront base for player-pool snapshots (no trailing slash); the app fetches <this>/<file>.json."
+  value       = local.pool_base_url
+}
+
+output "league_id" {
+  description = "VITE_LEAGUE_ID — the single league's id."
+  value       = var.league_id
+}
+
 output "table_name" {
   description = "DynamoDB table name."
   value       = module.dynamodb.table_name
@@ -9,12 +32,12 @@ output "ws_api_endpoint" {
 }
 
 output "ws_client_url" {
-  description = "wss:// URL for the frontend to connect to."
+  description = "VITE_WS_URL — wss:// URL for the frontend to connect to."
   value       = module.apigw_ws.ws_client_url
 }
 
 output "http_api_endpoint" {
-  description = "HTTP API base URL for setup/config CRUD."
+  description = "VITE_HTTP_BASE — HTTP API base URL for setup/config CRUD (execute-api, called cross-origin)."
   value       = module.apigw_http.api_endpoint
 }
 

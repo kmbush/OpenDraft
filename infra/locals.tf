@@ -30,6 +30,19 @@ locals {
   ssm_passcode_hash_param = "/opendraft/${var.env}/admin-passcode-hash"
   ssm_hmac_key_param      = "/opendraft/${var.env}/session-hmac-key"
 
+  # Public base URL the browser loads the app from: the custom domain if set,
+  # else the default CloudFront domain. Pool snapshots hang off /<pool_prefix>.
+  web_base_url  = var.domain_name != "" ? "https://${var.domain_name}" : "https://${module.s3_cloudfront.distribution_domain_name}"
+  pool_base_url = "${local.web_base_url}/${trimsuffix(var.pool_prefix, "/")}"
+
+  # CORS allow-list for the HTTP API. Explicit override wins; otherwise derive
+  # from the CloudFront domain (+ custom domain when configured). compact()/
+  # distinct() drop the empty custom-domain slot and any duplicate.
+  web_allowed_origins = length(var.web_allowed_origins) > 0 ? var.web_allowed_origins : distinct(compact([
+    "https://${module.s3_cloudfront.distribution_domain_name}",
+    var.domain_name != "" ? "https://${var.domain_name}" : "",
+  ]))
+
   # Lambda invoke ARNs in the API Gateway path form (what apigatewayv2
   # integrations expect for AWS_PROXY). Constructed to keep apigw independent
   # of the lambda module.

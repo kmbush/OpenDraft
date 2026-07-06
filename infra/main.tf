@@ -45,9 +45,10 @@ module "apigw_ws" {
 }
 
 module "apigw_http" {
-  source          = "./modules/apigw-http"
-  name            = "${local.name_prefix}-http"
-  http_invoke_arn = local.invoke_arn.http
+  source             = "./modules/apigw-http"
+  name               = "${local.name_prefix}-http"
+  http_invoke_arn    = local.invoke_arn.http
+  cors_allow_origins = local.web_allowed_origins
   routes = [
     "POST /admin/session",
     "POST /leagues",

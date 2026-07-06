@@ -93,7 +93,8 @@ Key variables (all have defaults — see `variables.tf`):
 | `env`                | `dev`          | drives names, tags, SSM paths |
 | `region`             | `us-east-1`    | |
 | `league_id`          | `opendraft`    | the single league's id |
-| `enable_pitr`        | `false`        | DynamoDB PITR (off = cheapest) |
+| `enable_pitr`        | `true`         | DynamoDB PITR (on — a live draft can't be recreated; sub-cent) |
+| `web_allowed_origins`| `[]`           | CORS origins for the HTTP API; empty = derive from CloudFront (+ custom domain) |
 | `lambda_memory_mb`   | `256`          | |
 | `log_retention_days` | `14`           | |
 | `domain_name`        | `""`           | optional custom domain (else CloudFront default) |
@@ -101,6 +102,36 @@ Key variables (all have defaults — see `variables.tf`):
 
 Useful outputs after apply: `ws_client_url`, `http_api_endpoint`, `cloudfront_domain_name`,
 `web_bucket`, `cloudfront_distribution_id`, `pool_bucket`, `ssm_passcode_hash_param`, `ssm_hmac_key_param`.
+
+### Web build config (browser client)
+
+The web app is served from CloudFront and calls the API's `execute-api` URLs **directly, cross-origin**
+(no CloudFront API proxy), and loads the player pool from CloudFront `/pools/`. The HTTP API therefore
+carries a `cors_configuration` allowing the web origin(s) — derived from `web_allowed_origins` (defaults
+to the CloudFront domain + custom domain). Credentials mode is **off**: the admin session is a bearer
+token in the `Authorization` header, not a cookie.
+
+Five outputs feed the `apps/web` Vite build 1:1 — a deploy script can read them straight through:
+
+| Terraform output    | Web env var       | Example value |
+|---------------------|-------------------|---------------|
+| `http_api_endpoint` | `VITE_HTTP_BASE`  | `https://abc123.execute-api.us-east-1.amazonaws.com` |
+| `ws_client_url`     | `VITE_WS_URL`     | `wss://xyz789.execute-api.us-east-1.amazonaws.com/$default` |
+| `pool_base_url`     | `VITE_POOL_BASE`  | `https://d1234.cloudfront.net/pools` |
+| `web_url`           | app origin        | `https://d1234.cloudfront.net` |
+| `league_id`         | `VITE_LEAGUE_ID`  | `opendraft` |
+
+```bash
+# Feed outputs straight into the web build:
+export VITE_HTTP_BASE=$(terraform output -raw http_api_endpoint)
+export VITE_WS_URL=$(terraform output -raw ws_client_url)
+export VITE_POOL_BASE=$(terraform output -raw pool_base_url)
+export VITE_LEAGUE_ID=$(terraform output -raw league_id)
+```
+
+> Chicken-and-egg: the CloudFront domain isn't known until the first `apply`, but the default CORS
+> allow-list derives from it within the **same** apply (no cycle — CloudFront doesn't depend on the HTTP
+> API). If you front the app with a custom domain, set `domain_name` and it's added to the allow-list too.
 
 ---
 
@@ -183,5 +214,5 @@ gitignored.
 | **Idle** (no draft) | **≈ $0** — DynamoDB on-demand, Lambda, both API Gateways, and Scheduler bill per request; only S3 storage (a few MB) + the CloudFront distribution existing are effectively free-tier / sub-cent. |
 | **During a draft** | **pennies** — a few thousand WS messages + DynamoDB writes + Lambda ms + a handful of one-shot schedules. |
 
-Optional cost adders you control: `enable_pitr=true` (~$0.20/GB-month of continuous backups),
-higher `lambda_memory_mb`, longer `log_retention_days`.
+Optional cost adders you control: `enable_pitr` (on by default; ~$0.20/GB-month of continuous backups on a
+few-MB table — set `false` to drop it on a dev stack), higher `lambda_memory_mb`, longer `log_retention_days`.

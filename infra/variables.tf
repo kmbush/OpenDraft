@@ -47,9 +47,9 @@ variable "scheduler_group_name" {
 }
 
 variable "enable_pitr" {
-  description = "Enable DynamoDB point-in-time recovery. Off by default for a hobby deploy (adds ~$0.20/GB-month of continuous backups). Turn on for a real draft if you want it."
+  description = "Enable DynamoDB point-in-time recovery. ON by default: a live draft's state cannot be recreated, and continuous backups cost only ~$0.20/GB-month on a table that holds a few MB. Set false to shave that sub-cent cost on a throwaway/dev stack."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "log_retention_days" {
@@ -78,6 +78,18 @@ variable "acm_certificate_arn" {
   description = "ACM certificate ARN for var.domain_name. MUST be in us-east-1 (CloudFront requirement). Required only if domain_name is set."
   type        = string
   default     = ""
+}
+
+# --- Web CORS origins ---------------------------------------------------------
+# The web app (CloudFront-hosted) calls the HTTP API's execute-api URL directly,
+# cross-origin, so the API must allow the web origin(s) via CORS. Leave empty to
+# auto-derive: the CloudFront distribution domain plus the custom domain (if set).
+# Override only to add extra origins (e.g. a local dev host or a second domain).
+
+variable "web_allowed_origins" {
+  description = "Exact web origins (scheme + host, no trailing slash) allowed to call the HTTP API cross-origin. Empty = derive from the CloudFront domain (+ custom domain if set). Do NOT include a trailing slash."
+  type        = list(string)
+  default     = []
 }
 
 # --- Secrets (values NOT stored in code) --------------------------------------

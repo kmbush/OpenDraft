@@ -11,8 +11,14 @@ league_id = "opendraft"
 # web_bucket_name  = ""   # default: opendraft-<env>-web-<account_id>
 # pool_prefix      = "pools/"
 
-# DynamoDB point-in-time recovery (off = cheapest; on for a real draft if wanted).
-# enable_pitr = false
+# DynamoDB point-in-time recovery (ON by default — a live draft can't be
+# recreated). Set false only for a throwaway/dev stack to save the sub-cent cost.
+# enable_pitr = true
+
+# CORS: origins allowed to call the HTTP API from the browser. Empty = derive
+# from the CloudFront domain (+ custom domain if set). Add extra origins here,
+# e.g. a local dev host. No trailing slash.
+# web_allowed_origins = ["https://draft.example.com", "http://localhost:5173"]
 
 # Lambda sizing / logs.
 # lambda_memory_mb   = 256

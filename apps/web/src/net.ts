@@ -6,11 +6,18 @@
 import type { OutboundMessage } from '@opendraft/shared';
 import { useLiveStore } from './store/store.js';
 
-const HTTP_BASE = '/api';
+/**
+ * Endpoints come from build-time env (§4.6). Unset → the dev-proxy fallbacks, so
+ * `pnpm dev` talks to the local harness unchanged; a deployed build points these
+ * at the API Gateway + CloudFront origins.
+ */
+const HTTP_BASE = import.meta.env.VITE_HTTP_BASE ?? '/api';
 
 /** The self-hosted league id (single-league today; multi-tenant-ready — §MEMORY). */
-export const LEAGUE_ID = 'dev-league';
-const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+export const LEAGUE_ID = import.meta.env.VITE_LEAGUE_ID ?? 'dev-league';
+const WS_URL =
+  import.meta.env.VITE_WS_URL ??
+  `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 let socket: WebSocket | null = null;
 let currentDraftId: string | null = null;
