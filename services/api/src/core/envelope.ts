@@ -4,7 +4,7 @@
  * only narrow untyped payloads into typed events and classify which events are
  * admin-gated.
  */
-import type { DraftEvent, DraftEventType, Position, Reject, RejectCode } from '@opendraft/shared';
+import type { DraftEvent, Position, Reject, RejectCode } from '@opendraft/shared';
 
 /**
  * Inbound envelope. Matches the shared outbound envelope shape plus an
@@ -18,24 +18,12 @@ export interface InboundEnvelope {
   token?: string;
 }
 
-/** Admin-only events; each requires a valid session token (AD-8, DESIGN §5.4). */
-export const ADMIN_EVENTS: ReadonlySet<DraftEventType> = new Set<DraftEventType>([
-  'START_REVEAL',
-  'REVEAL_DONE',
-  'ANNOUNCE_DONE',
-  'START',
-  'GO_LIVE',
-  'PAUSE',
-  'RESUME',
-  'UNDO',
-  'EDIT_PICK',
-  'SET_ON_CLOCK',
-  'EDIT_ORDER',
-  'SET_ORDER',
-  'REASSIGN_PICK',
-  'REMOVE_PICK',
-  'REWIND_TO',
-]);
+/**
+ * Admin-only events require a valid session token (AD-8, DESIGN §5.4). The gate
+ * is `MapResult.admin`, which `mapEnvelopeToEvent` sets to `true` for every admin
+ * event (only `SUBMIT_PICK` is `false`) — so a separate event-name allowlist is
+ * redundant. The single source of truth is the mapping below.
+ */
 
 /** `SYNC` is a snapshot *request*, not a state mutation. */
 export const SYNC_REQUEST = 'SYNC';

@@ -13,6 +13,7 @@
  * schedule data, not a value signal (AD-6).
  */
 import type { Player, PoolSnapshot, Position } from '@opendraft/shared';
+import { positionRank } from '@opendraft/shared';
 import { byeForTeam } from './byes.js';
 import type { SnapshotConfig } from './config.js';
 import {
@@ -21,14 +22,6 @@ import {
   isPlaying,
   normalizePosition,
 } from './sleeper.js';
-
-/** UI-facing position grouping order (offense, then IDP). Within a group, alpha. */
-const POSITION_ORDER: readonly Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
-
-function positionRank(position: Position): number {
-  const idx = POSITION_ORDER.indexOf(position);
-  return idx === -1 ? POSITION_ORDER.length : idx;
-}
 
 function normalizeName(sp: SleeperPlayer): { firstName: string; lastName: string } {
   const first = (sp.first_name ?? '').trim();

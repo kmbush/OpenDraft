@@ -13,15 +13,16 @@
  * via SYNC and the live ON THE CLOCK stage takes over.
  */
 import { roundForOverall, slotForOverallPick } from '@opendraft/engine';
-import type { DraftState, Pick, Position } from '@opendraft/shared';
+import type { DraftState, Pick } from '@opendraft/shared';
 import { FileDown, Radio, Trophy, Wifi, WifiOff, Zap } from 'lucide-react';
 import { type ReactNode, useMemo } from 'react';
 import { BrandMark } from '../components/brand-mark.js';
-import { indexPlayers, usePool } from '../hooks/usePool.js';
+import { Confetti } from '../components/confetti.js';
+import { PositionBadge } from '../components/position-badge.js';
+import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
-import { POSITION_COLOR } from '../lib/positions.js';
 import { teamColor } from '../lib/teams.js';
 import { useLiveStore } from '../store/store.js';
 import { RevealShow } from './reveal.js';
@@ -49,22 +50,6 @@ function ordinal(n: number): string {
 }
 
 // --- Shared bits -----------------------------------------------------------
-
-/** Position color-coded badge (shared map; never a ranking cue). */
-function PositionBadge({ position, className }: { position: Position; className?: string }) {
-  const c = POSITION_COLOR[position];
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center justify-center rounded-md font-black uppercase leading-none tracking-wide',
-        className,
-      )}
-      style={{ color: c, backgroundColor: `${c}22`, boxShadow: `inset 0 0 0 1.5px ${c}66` }}
-    >
-      {position}
-    </span>
-  );
-}
 
 /** Uppercase tracked-out eyebrow label; amber by default, or tinted to a team. */
 function Eyebrow({
@@ -98,44 +83,6 @@ function TeamDot({ color, className }: { color: string; className?: string }) {
       style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}88` }}
       aria-hidden
     />
-  );
-}
-
-const CONFETTI_COLORS = ['#f59e0b', '#ef4444', '#22c55e', '#3b82f6', '#a855f7', '#f8fafc'];
-
-/** A one-shot confetti burst; pieces are randomized once per mount. */
-function Confetti({ count = 90 }: { count?: number }) {
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: count }, (_, i) => ({
-        left: Math.random() * 100,
-        delay: Math.random() * 0.7,
-        duration: 2.2 + Math.random() * 1.6,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        size: 6 + Math.random() * 9,
-        round: Math.random() > 0.5,
-      })),
-    [count],
-  );
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {pieces.map((p, i) => (
-        <span
-          // biome-ignore lint/suspicious/noArrayIndexKey: static decorative burst
-          key={i}
-          className="animate-confetti absolute top-0 block"
-          style={{
-            left: `${p.left}%`,
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            borderRadius: p.round ? '9999px' : '2px',
-            animationDelay: `${p.delay}s`,
-            animationDuration: `${p.duration}s`,
-          }}
-        />
-      ))}
-    </div>
   );
 }
 
@@ -391,7 +338,11 @@ function RecentPicks({
               <span className="w-10 shrink-0 text-center text-lg font-black tabular-nums text-white/30">
                 {pick.overall}
               </span>
-              <PositionBadge position={pick.position} className="h-9 w-11 shrink-0 text-sm" />
+              <PositionBadge
+                position={pick.position}
+                tint="dark"
+                className="h-9 w-11 shrink-0 rounded-md text-sm"
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-lg font-bold leading-tight">
                   {playerName(pick.playerId)}
@@ -477,7 +428,7 @@ function RevealBeat({
   const nflTeam = playerTeam(pick.playerId);
   return (
     <div key="reveal" className="relative w-full">
-      <Confetti />
+      <Confetti count={90} />
       <div className="animate-reveal relative flex flex-col items-center px-8 text-center">
         <Eyebrow className="text-base md:text-xl" color={colorOf(pick.teamSlot)}>
           With the {ordinal(pick.overall)} pick, {teamName(pick.teamSlot)} select
@@ -485,7 +436,8 @@ function RevealBeat({
         <div className="mt-6 flex items-center gap-5">
           <PositionBadge
             position={pick.position}
-            className="h-16 px-4 text-3xl md:h-20 md:text-4xl"
+            tint="dark"
+            className="h-16 rounded-md px-4 text-3xl md:h-20 md:text-4xl"
           />
           <h1
             className="font-black uppercase leading-[0.9] tracking-tight"
@@ -718,7 +670,11 @@ function CompleteView({
           <span className="text-sm font-semibold uppercase tracking-[0.3em] text-white/40">
             Final Pick
           </span>
-          <PositionBadge position={last.position} className="h-10 w-12 text-base" />
+          <PositionBadge
+            position={last.position}
+            tint="dark"
+            className="h-10 w-12 rounded-md text-base"
+          />
           <span className="text-2xl font-black">{playerName(last.playerId)}</span>
           <span className="text-lg text-white/50">{teamName(last.teamSlot)}</span>
         </div>
@@ -775,10 +731,7 @@ export function BoardView() {
   const waitingMs = settings.waitingSec * 1000;
   const remaining = remainingMs(draft.pickDeadline, serverOffsetMs, now);
 
-  const playerName = (id: string) => {
-    const p = byId.get(id);
-    return p ? `${p.firstName} ${p.lastName}` : id;
-  };
+  const nameOf = (id: string) => playerName(byId, id);
   const playerTeam = (id: string) => byId.get(id)?.team ?? '';
   const teamName = (slot: number) => teamList.find((t) => t.slot === slot)?.name ?? '—';
   const colorOf = (slot: number) => teamColor(teamList.find((t) => t.slot === slot));
@@ -875,7 +828,7 @@ export function BoardView() {
       ) : phase === 'complete' ? (
         <CompleteView
           draft={draft}
-          playerName={playerName}
+          playerName={nameOf}
           teamName={teamName}
           exportHref={exportHref}
         />
@@ -884,7 +837,7 @@ export function BoardView() {
           <PausedHero teamName={onClockSlot ? teamName(onClockSlot) : '—'} color={onClockColor} />
           <RecentPicks
             picks={recent}
-            playerName={playerName}
+            playerName={nameOf}
             playerTeam={playerTeam}
             teamName={teamName}
             colorOf={colorOf}
@@ -907,7 +860,7 @@ export function BoardView() {
           </div>
           <RecentPicks
             picks={recent}
-            playerName={playerName}
+            playerName={nameOf}
             playerTeam={playerTeam}
             teamName={teamName}
             colorOf={colorOf}
@@ -918,7 +871,7 @@ export function BoardView() {
               pick={draft.pendingPick}
               nextTeamName={onClockSlot ? teamName(onClockSlot) : '—'}
               nextColor={onClockColor}
-              playerName={playerName}
+              playerName={nameOf}
               playerTeam={playerTeam}
               teamName={teamName}
               colorOf={colorOf}

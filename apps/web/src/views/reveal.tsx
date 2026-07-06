@@ -13,6 +13,7 @@ import type { DraftState, RevealGame } from '@opendraft/shared';
 import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
 import { Sparkles, Ticket } from 'lucide-react';
 import type { ComponentType } from 'react';
+import { Confetti } from '../components/confetti.js';
 import { estimatedServerNow, formatClock } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
 import { readableOn } from '../lib/teams.js';
@@ -24,36 +25,6 @@ export interface RevealGameProps {
   serverOffsetMs: number;
   teamName: (slot: number) => string;
   colorOf: (slot: number) => string;
-}
-
-// --- Shared bits (kept local so the board shell stays lean) -----------------
-
-const CONFETTI_COLORS = ['#f59e0b', '#ef4444', '#22c55e', '#3b82f6', '#a855f7', '#f8fafc'];
-
-function Confetti({ count = 120 }: { count?: number }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {Array.from({ length: count }, (_, i) => {
-        const left = (i * 37) % 100;
-        const delay = (i % 12) * 0.13;
-        const duration = 2.4 + ((i * 7) % 18) / 10;
-        return (
-          <span
-            // biome-ignore lint/suspicious/noArrayIndexKey: static decorative burst
-            key={i}
-            className="animate-confetti absolute top-0 block h-2.5 w-2.5"
-            style={{
-              left: `${left}%`,
-              backgroundColor: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-              borderRadius: i % 2 ? '9999px' : '2px',
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 // --- Countdown sub-phase ("THE REVEAL BEGINS IN 0:30…") ---------------------

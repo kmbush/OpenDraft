@@ -5,17 +5,9 @@
  */
 import type { Position } from '@opendraft/shared';
 
-export const POSITION_ORDER: readonly Position[] = [
-  'QB',
-  'RB',
-  'WR',
-  'TE',
-  'K',
-  'DEF',
-  'DL',
-  'LB',
-  'DB',
-];
+// Position ordering + rank live in `@opendraft/shared` (single-sourced with the
+// pool builder's output sort); re-exported here so local imports stay stable.
+export { POSITION_ORDER, positionRank } from '@opendraft/shared';
 
 export const POSITION_LABEL: Readonly<Record<Position, string>> = {
   QB: 'Quarterbacks',
@@ -28,11 +20,6 @@ export const POSITION_LABEL: Readonly<Record<Position, string>> = {
   LB: 'Linebackers',
   DB: 'Defensive Backs',
 };
-
-export function positionRank(position: Position): number {
-  const idx = POSITION_ORDER.indexOf(position);
-  return idx === -1 ? POSITION_ORDER.length : idx;
-}
 
 /**
  * Broadcast position color-coding for badges (board §7). Hex so callers can

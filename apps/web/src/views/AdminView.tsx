@@ -11,7 +11,6 @@ import {
   IDP_POSITIONS,
   OFFENSE_POSITIONS,
   type Pick,
-  type Player,
   type Position,
 } from '@opendraft/shared';
 import {
@@ -40,6 +39,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { PositionBadge } from '../components/position-badge.js';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
@@ -51,10 +51,11 @@ import {
   CardTitle,
 } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
+import { Modal } from '../components/ui/modal.js';
 import { Select } from '../components/ui/select.js';
 import { Separator } from '../components/ui/separator.js';
 import { useLeague } from '../hooks/useLeague.js';
-import { fetchPoolCount, indexPlayers, usePool } from '../hooks/usePool.js';
+import { fetchPoolCount, indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
@@ -719,47 +720,26 @@ interface Confirmation {
 /** Small modal for confirming destructive admin actions (screenshot-friendly). */
 function ConfirmDialog({ req, onClose }: { req: Confirmation; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Cancel"
-        onClick={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-black/40"
-      />
-      <Card className="relative w-full max-w-md shadow-lg" role="alertdialog" aria-modal="true">
-        <CardHeader>
-          <CardTitle className="text-base">{req.title}</CardTitle>
-          <CardDescription>{req.description}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              req.onConfirm();
-              onClose();
-            }}
-          >
-            {req.confirmLabel}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-/** Position-color chip (category cue only, never a value signal — CONVENTIONS §5). */
-function PositionChip({ position }: { position: Position }) {
-  const c = POSITION_COLOR[position];
-  return (
-    <span
-      className="inline-flex h-5 w-8 shrink-0 items-center justify-center rounded font-bold uppercase leading-none tracking-wide"
-      style={{ color: c, backgroundColor: `${c}1a`, boxShadow: `inset 0 0 0 1px ${c}55` }}
-    >
-      {position}
-    </span>
+    <Modal onClose={onClose}>
+      <CardHeader>
+        <CardTitle className="text-base">{req.title}</CardTitle>
+        <CardDescription>{req.description}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={() => {
+            req.onConfirm();
+            onClose();
+          }}
+        >
+          {req.confirmLabel}
+        </Button>
+      </CardContent>
+    </Modal>
   );
 }
 
@@ -805,7 +785,7 @@ function PlayerChip({
       title="Drag to another team to reassign"
     >
       <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <PositionChip position={pick.position} />
+      <PositionBadge position={pick.position} className="h-5 w-8 shrink-0 rounded" />
       <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{pick.overall}</span>
       <button
@@ -930,10 +910,7 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
   const byId = useMemo(() => indexPlayers(pool.players), [pool.players]);
   if (!draft) return null;
 
-  const nameOf = (id: string): string => {
-    const p: Player | undefined = byId.get(id);
-    return p ? `${p.firstName} ${p.lastName}` : id;
-  };
+  const nameOf = (id: string): string => playerName(byId, id);
 
   const { teams, rounds } = draft.settings;
   const totalPicks = teams * rounds;
@@ -1291,7 +1268,7 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
                   <span className="w-10 shrink-0 text-xs font-bold tabular-nums text-muted-foreground">
                     #{pick.overall}
                   </span>
-                  <PositionChip position={pick.position} />
+                  <PositionBadge position={pick.position} className="h-5 w-8 shrink-0 rounded" />
                   <span className="min-w-0 flex-1 truncate font-medium">
                     {nameOf(pick.playerId)}
                   </span>

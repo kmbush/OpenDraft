@@ -9,13 +9,7 @@ import type { OutboundMessage } from '@opendraft/shared';
 import type { Deps } from '../ports.js';
 import { verifySession } from './auth.js';
 import { fanOut, reconcileScheduler } from './broadcast.js';
-import {
-  ADMIN_EVENTS,
-  type InboundEnvelope,
-  SYNC_REQUEST,
-  makeReject,
-  mapEnvelopeToEvent,
-} from './envelope.js';
+import { type InboundEnvelope, SYNC_REQUEST, makeReject, mapEnvelopeToEvent } from './envelope.js';
 
 /** Send the full authoritative snapshot to one connection (DESIGN §5.5). */
 export async function sendSync(deps: Deps, connectionId: string, draftId: string): Promise<void> {
@@ -56,7 +50,8 @@ export async function dispatchAction(
   }
 
   // Admin gate — verified server-side regardless of client UI gating (AD-8).
-  if (mapped.admin || ADMIN_EVENTS.has(mapped.event.type)) {
+  // `mapped.admin` is set for every admin event by `mapEnvelopeToEvent`.
+  if (mapped.admin) {
     const auth = await verifySession(deps.secrets, env.token, deps.env.leagueId, deps.env.now());
     if (!auth.ok) {
       await ackSender(makeReject(env.draftId, 'UNAUTHORIZED', 'Admin session required', 0));

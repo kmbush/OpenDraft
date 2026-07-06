@@ -16,12 +16,14 @@ import type { Pick, Player, Position } from '@opendraft/shared';
 import { AlertCircle, Clock, Loader2, Lock, Pause, Search, Trophy, X, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppHeader } from '../components/app-header.js';
+import { PositionBadge } from '../components/position-badge.js';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
 import { Button } from '../components/ui/button.js';
 import { Card, CardContent } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
-import { indexPlayers, usePool } from '../hooks/usePool.js';
+import { Modal } from '../components/ui/modal.js';
+import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
@@ -36,22 +38,6 @@ import {
 import { readableOn, teamColor } from '../lib/teams.js';
 import { takenIds } from '../store/reducer.js';
 import { useLiveStore } from '../store/store.js';
-
-/** Shared position color-coded badge (category cue only, never a value signal). */
-function PositionBadge({ position, className }: { position: Position; className?: string }) {
-  const c = POSITION_COLOR[position];
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md font-bold uppercase leading-none tracking-wide',
-        className,
-      )}
-      style={{ color: c, backgroundColor: `${c}1a`, boxShadow: `inset 0 0 0 1px ${c}55` }}
-    >
-      {position}
-    </span>
-  );
-}
 
 /** Full-page frame: slim header + a centered body column. */
 function Frame({ children }: { children: React.ReactNode }) {
@@ -193,7 +179,7 @@ function RosterSlotRow({ slot, name, meta }: { slot: RosterSlot; name: string; m
       </span>
       {pick ? (
         <>
-          <PositionBadge position={pick.position} className="h-6 w-9 text-xs" />
+          <PositionBadge position={pick.position} className="h-6 w-9 shrink-0 rounded-md text-xs" />
           <span className="min-w-0 flex-1 truncate">
             <span className="font-medium">{name}</span>
             {meta && <span className="ml-1.5 text-xs text-muted-foreground">{meta}</span>}
@@ -488,7 +474,7 @@ function PlayerRow({
   return (
     <li className="group flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted">
       <div className="flex min-w-0 items-center gap-3">
-        <PositionBadge position={player.position} className="h-6 w-9 text-xs" />
+        <PositionBadge position={player.position} className="h-6 w-9 shrink-0 rounded-md text-xs" />
         <span className="min-w-0 truncate">
           <span className="font-medium">
             {player.firstName} {player.lastName}
@@ -521,40 +507,35 @@ function DraftConfirmDialog({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Cancel"
-        onClick={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-black/40"
-      />
-      <Card className="relative w-full max-w-md shadow-lg" role="alertdialog" aria-modal="true">
-        <CardContent className="space-y-4 p-6">
-          <div>
-            <h2 className="text-lg font-black tracking-tight">
-              Draft {player.firstName} {player.lastName}?
-            </h2>
-            <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-              <PositionBadge position={player.position} className="h-5 w-8 text-[11px]" />
-              {meta || POSITION_LABEL[player.position]}
-            </p>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                onConfirm();
-                onClose();
-              }}
-            >
-              <Zap className="h-4 w-4" /> Draft
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <Modal onClose={onClose}>
+      <CardContent className="space-y-4 p-6">
+        <div>
+          <h2 className="text-lg font-black tracking-tight">
+            Draft {player.firstName} {player.lastName}?
+          </h2>
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            <PositionBadge
+              position={player.position}
+              className="h-5 w-8 shrink-0 rounded-md text-[11px]"
+            />
+            {meta || POSITION_LABEL[player.position]}
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            <Zap className="h-4 w-4" /> Draft
+          </Button>
+        </div>
+      </CardContent>
+    </Modal>
   );
 }
 
@@ -574,10 +555,7 @@ export function StationView() {
   const onClockTeam = draft?.teams.find((t) => t.slot === onClockSlot) ?? null;
   const taken = useMemo(() => takenIds(state), [state]);
   const byId = useMemo(() => indexPlayers(pool.players), [pool.players]);
-  const nameOf = (id: string): string => {
-    const p = byId.get(id);
-    return p ? `${p.firstName} ${p.lastName}` : id;
-  };
+  const nameOf = (id: string): string => playerName(byId, id);
   const metaOf = (id: string): string => {
     const p = byId.get(id);
     return p ? playerMeta(p, showBye) : '';

@@ -22,12 +22,7 @@ export { onConnect, onDisconnect } from './core/connect.js';
 export { onTimerFire, type TimerFire } from './core/autopick.js';
 export { handleHttp, type HttpRequest, type HttpResponse } from './core/http.js';
 export { issueSession, verifyPasscode, verifySession, type SessionClaims } from './core/auth.js';
-export {
-  ADMIN_EVENTS,
-  type InboundEnvelope,
-  makeReject,
-  mapEnvelopeToEvent,
-} from './core/envelope.js';
+export { type InboundEnvelope, makeReject, mapEnvelopeToEvent } from './core/envelope.js';
 
 export { buildDeps } from './env.js';
 export { DynamoPersistence } from './adapters/dynamo-persistence.js';

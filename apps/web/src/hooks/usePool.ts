@@ -72,3 +72,9 @@ export async function fetchPoolCount(snapshotId: string): Promise<number> {
 export function indexPlayers(players: Player[]): Map<string, Player> {
   return new Map(players.map((p) => [p.id, p]));
 }
+
+/** `"First Last"` for a player id, or the raw id if the pool doesn't know it. */
+export function playerName(byId: Map<string, Player>, id: string): string {
+  const p = byId.get(id);
+  return p ? `${p.firstName} ${p.lastName}` : id;
+}

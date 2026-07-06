@@ -7,15 +7,15 @@
  * index.css hides the chrome, forces a light landscape palette, and keeps the
  * grid legible. No ADP/ranking anywhere — position colors are a category cue only.
  */
-import type { Pick, Position, RosterFormat } from '@opendraft/shared';
+import type { Pick, RosterFormat } from '@opendraft/shared';
 import { FileDown, Printer } from 'lucide-react';
 import { useMemo } from 'react';
 import { BrandMark } from '../components/brand-mark.js';
+import { PositionBadge } from '../components/position-badge.js';
 import { useLeague } from '../hooks/useLeague.js';
-import { indexPlayers, usePool } from '../hooks/usePool.js';
+import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { buildBoardGrid } from '../lib/board.js';
 import { cn } from '../lib/cn.js';
-import { POSITION_COLOR } from '../lib/positions.js';
 import { teamColor } from '../lib/teams.js';
 import { useLiveStore } from '../store/store.js';
 
@@ -26,19 +26,6 @@ function formatLabel(rf: RosterFormat): string {
   if (rf.starters.DL || rf.starters.LB || rf.starters.DB) return 'IDP';
   if (rf.flex.some((f) => f.kind === 'SUPERFLEX')) return 'Superflex';
   return 'Standard';
-}
-
-/** Small position badge — the shared color map, purely a category cue. */
-function PositionTag({ position }: { position: Position }) {
-  const c = POSITION_COLOR[position];
-  return (
-    <span
-      className="inline-flex h-4 items-center justify-center rounded px-1 text-[9px] font-black uppercase leading-none tracking-wide"
-      style={{ color: c, backgroundColor: `${c}1f`, boxShadow: `inset 0 0 0 1px ${c}66` }}
-    >
-      {position}
-    </span>
-  );
 }
 
 /** One drafted-player cell, or a quiet placeholder for an unfilled slot. */
@@ -53,7 +40,11 @@ function BoardCell({ pick, name, team }: { pick: Pick | null; name: string; team
   return (
     <td className="border border-border p-1.5 align-top">
       <div className="flex items-center justify-between gap-1">
-        <PositionTag position={pick.position} />
+        <PositionBadge
+          position={pick.position}
+          tint="print"
+          className="h-4 rounded px-1 text-[9px]"
+        />
         <span className="text-[9px] font-semibold tabular-nums text-muted-foreground">
           {pick.overall}
         </span>
@@ -84,10 +75,7 @@ export function ExportView() {
   const grid = buildBoardGrid(picks, settings.teams, settings.rounds, order);
   const teamOf = (slot: number) => teamList.find((t) => t.slot === slot);
   const name = league?.name?.trim() || DEFAULT_LEAGUE_NAME;
-  const nameOf = (id: string) => {
-    const p = byId.get(id);
-    return p ? `${p.firstName} ${p.lastName}` : id;
-  };
+  const nameOf = (id: string) => playerName(byId, id);
   const teamOfPlayer = (id: string) => byId.get(id)?.team ?? '';
 
   return (
