@@ -5,9 +5,10 @@
  * draft rules live in the engine; this file only transports and guards.
  */
 import { reduce } from '@opendraft/engine';
-import type { OutboundMessage } from '@opendraft/shared';
+import { type OutboundMessage, TIMER_NUDGE } from '@opendraft/shared';
 import type { Deps } from '../ports.js';
 import { verifySession } from './auth.js';
+import { advanceTimedState } from './autopick.js';
 import { fanOut, reconcileScheduler } from './broadcast.js';
 import { type InboundEnvelope, SYNC_REQUEST, makeReject, mapEnvelopeToEvent } from './envelope.js';
 
@@ -40,6 +41,14 @@ export async function dispatchAction(
 
   if (env.type === SYNC_REQUEST) {
     await sendSync(deps, connectionId, env.draftId);
+    return;
+  }
+
+  // Client nudge = the primary timed-transition trigger (AD-1). No auth, no
+  // payload beyond draftId; the server maps status→transition and gates on its
+  // own clock. Distinct from admin "skip" actions, which bypass the time-gate.
+  if (env.type === TIMER_NUDGE) {
+    await handleNudge(deps, ackSender, env.draftId);
     return;
   }
 
@@ -94,4 +103,31 @@ export async function dispatchAction(
   // Success: broadcast the engine's message to everyone (sender included = ack).
   await Promise.all(outbox.map((m) => fanOut(deps, m)));
   await reconcileScheduler(deps, next);
+}
+
+/**
+ * Handle a non-admin `TIMER_NUDGE` (AD-1). The transition itself fans out to
+ * everyone (PICK_MADE / SYNC), so success needs no separate ack. Only the two
+ * retry-able rejections go back to the nudging connection:
+ *   - `TOO_EARLY`: the server's clock hasn't reached the deadline — keep waiting.
+ *   - `STALE_VERSION`: another screen's nudge (or a pick) already committed.
+ * A nudge that lands when the draft is no longer in a timed state is ignored
+ * silently — the client is corrected by the fan-out it will receive.
+ */
+async function handleNudge(
+  deps: Deps,
+  ackSender: (m: OutboundMessage) => Promise<unknown>,
+  draftId: string,
+): Promise<void> {
+  const result = await advanceTimedState(deps, draftId, { source: 'nudge' });
+  if (result.ok || result.reason === 'not_timed') return;
+  if (result.reason === 'too_early') {
+    await ackSender(
+      makeReject(draftId, 'TOO_EARLY', 'Too early — clock not expired', result.currentVersion),
+    );
+    return;
+  }
+  await ackSender(
+    makeReject(draftId, 'STALE_VERSION', 'Draft advanced concurrently', result.currentVersion),
+  );
 }

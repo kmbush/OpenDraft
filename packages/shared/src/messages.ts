@@ -34,7 +34,21 @@ export type RejectCode =
   // Transport/auth rejects owned by the handler layer (not the engine).
   | 'UNAUTHORIZED'
   | 'BAD_REQUEST'
-  | 'NOT_FOUND';
+  | 'NOT_FOUND'
+  // A `TIMER_NUDGE` arrived before the server's own clock reached the deadline;
+  // retry-able — the client keeps waiting and nudges again (AD-1).
+  | 'TOO_EARLY';
+
+/**
+ * Inbound (client→server) nudge: the sender's offset-corrected countdown for the
+ * current timed state has crossed its `honorDeadline` (DESIGN AD-1). Carries only
+ * `draftId` — no auth, no phase. The server maps the current status to the
+ * transition and honors it **only when its OWN clock is past `honorDeadline`**
+ * (else `TOO_EARLY`); the version guard collapses concurrent nudges from multiple
+ * screens into one commit (losers get `STALE_VERSION`). The EventBridge scheduler
+ * stays armed as a backstop for when no client is watching.
+ */
+export const TIMER_NUDGE = 'TIMER_NUDGE';
 
 /**
  * A pick was applied (manual or auto). Carries the completed pick for the

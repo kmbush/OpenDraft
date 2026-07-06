@@ -171,13 +171,37 @@ server-driven auto-pick logic running every tick, or heavy per-second server com
 service becomes justified. We do not need that (see AD-2). Revisit at the SaaS stage, where a warm
 always-on tier may also help many concurrent drafts.
 
-**Auto-advance on timer expiry** (decided — build in MVP): when the clock hits zero, the draft **auto-picks a
-random *legal* player** for the team on the clock (see AD-11). Mechanism: when a team goes on the clock the
-authority creates a **one-shot EventBridge Scheduler** entry at `pickDeadline`; if the team hasn't picked, the
-schedule invokes the authority, which runs the same engine `reduce` with a `TIMER_EXPIRE` event (auto-pick),
-then broadcasts the pick like any other. A manual pick before the deadline cancels/ignores the stale
-schedule. This is a *one-shot* scheduled invocation, **not** a continuously-simulating server — AD-1 still
-holds.
+**Timed transitions: client-nudged, server-gated, scheduler as backstop** (revised 2026-07-05). Every timed
+transition — the 10s announce lockout end, the 30s go-live/reveal, and the 90s pick clock's auto-pick — is
+driven the same way. The **primary trigger is a client nudge**: while a screen sits in a timed state, its
+offset-corrected countdown crosses the deadline and it sends a single `TIMER_NUDGE { draftId }` (no auth, no
+phase). The **server keeps authority** by gating on its OWN clock — it honors a nudge only when
+`serverNow >= honorDeadline(state)` for the current status, else replies `TOO_EARLY` (retry-able) and mutates
+nothing. Any of board/station/admin may nudge; the **version guard collapses** the flurry of simultaneous
+nudges into one commit, losers get `STALE_VERSION`. The server maps status→transition
+(`REVEALING→REVEAL_DONE`, `STARTING→GO_LIVE`, `PICK_IN→ANNOUNCE_DONE`, `ON_CLOCK→TIMER_EXPIRE`) and, for the
+auto-pick, the **server** loads the pool and computes `available` — the client's nudge is only a "the clock
+expired" signal, never trusted for player selection (AD-11).
+
+*Why the change:* EventBridge Scheduler delivers one-shot schedules ~1–2 minutes late — fine as a liveness
+floor, far too slow for a live draft, which otherwise stalled ~1–2 min after every pick on the deployed stack.
+
+**EventBridge Scheduler is demoted to a backstop** (kept — it is the liveness floor for fully-remote /
+unattended leagues). The authority still arms a one-shot at `honorDeadline(state)` on every transition; because
+a present client nudges first, the scheduler now only ever fires when *no client is watching*, so its latency
+is invisible by definition. Its fire runs the identical shared `advanceTimedState` path, keyed by
+`expectedVersion` so a stale schedule (a manual pick / "Go now" already advanced) is a no-op. **No infra
+change, no SQS** — only the ON_CLOCK arm time shifts by the grace buffer (below).
+
+**Grace buffer on auto-pick only.** `honorDeadline` for `ON_CLOCK` is `pickDeadline + GRACE_MS`
+(`GRACE_MS = 1500`); announce/go-live/reveal use `pickDeadline`/`liveAt`/`announceUntil` exactly (no grace). The
+grace protects the **buzzer-beater** — a human's last-instant `SUBMIT_PICK` (which has no time-gate) beats the
+auto-pick — absorbs cross-device clock-sync spread, and covers the scheduler's whole-second `at()` truncation.
+
+**Admin "skip" actions stay distinct.** Admin `GO_LIVE` ("Go now"), `REVEAL_DONE` ("Skip to result"), and the
+announce-skip remain admin-token-gated and **bypass the time-gate** (admin skips *early*, on purpose). Only the
+non-admin `TIMER_NUDGE` path is time-gated. This is still a *one-shot* scheduled backstop, **not** a
+continuously-simulating server — AD-1 holds.
 
 ### AD-2 — Draft engine as a pure, shared module
 
@@ -326,9 +350,12 @@ variables. Logo uploaded to S3, served via CloudFront. No rebuild required to re
 **Chosen:** when the pick clock hits zero, the engine auto-selects **a uniformly random player from the set of
 *legal* available players** for the team on the clock, where "legal" respects the team's **positional roster
 bounds** (max at each position — e.g. it won't hand a team a 4th QB when QB is full). Driven by a
-`TIMER_EXPIRE` event through the same pure `reduce` (AD-2), triggered by the one-shot EventBridge schedule
-(AD-1). The auto-picked player flows through the identical "the pick is in" path so the board treats it like
-any pick.
+`TIMER_EXPIRE` event through the same pure `reduce` (AD-2). The transition is **triggered by a client
+`TIMER_NUDGE` (primary) and server-gated at `pickDeadline + GRACE_MS`**, with the one-shot EventBridge schedule
+as a backstop (AD-1). On either path the **server** — never the client — loads the pool and computes the
+`available` list, then runs `reduce` with the seeded RNG. The auto-picked player flows through the identical
+"the pick is in" path so the board treats it like any pick. The `GRACE_MS = 1500` buffer guarantees a human's
+last-instant `SUBMIT_PICK` (which has no time-gate) beats the auto-pick.
 
 **Rejected:** informational-only expiry (team just keeps stalling); auto-pick "best available by rank" (would
 require shipping rank — violates AD-6, and defeats the anti-influence intent); auto-pick strictly by roster
@@ -416,14 +443,16 @@ stateDiagram-v2
 
 - **`SETUP`** — settings being configured.
 - **`ORDER_SET`** — draft order chosen (manual entry or randomizer reveal), ready to start.
-- **`ON_CLOCK`** — a team is on the clock; `pickDeadline` timestamp is set and broadcast. A one-shot
-  EventBridge schedule is armed at `pickDeadline`; if it fires first, a `TIMER_EXPIRE` event auto-picks a
-  random legal player (AD-11) and transitions to `PICK_IN` exactly as a manual pick would.
+- **`ON_CLOCK`** — a team is on the clock; `pickDeadline` timestamp is set and broadcast. A watching client
+  sends `TIMER_NUDGE` when its countdown crosses `pickDeadline + GRACE_MS`; the server (gating on its own
+  clock) runs a `TIMER_EXPIRE` event that auto-picks a random legal player (AD-11) and transitions to
+  `PICK_IN` exactly as a manual pick would. A one-shot EventBridge schedule armed at the same instant is the
+  backstop when no client is watching (AD-1).
 - **`PICK_IN`** — the **hard, server-enforced announcement lockout** after a pick: the pointer has advanced
   to the next team but there is **no pick clock** and **every `SUBMIT_PICK` is rejected (`ANNOUNCING`)** —
-  nobody can draft. `announceUntil = now + waitingSec` bounds it; a one-shot schedule armed at it fires
-  `ANNOUNCE_DONE`. The board plays "the pick is in → the pick announced → on the clock: <next team>" across
-  the window.
+  nobody can draft. `announceUntil = now + waitingSec` bounds it; a client nudge (backstopped by a schedule)
+  at `announceUntil` fires `ANNOUNCE_DONE`. The board plays "the pick is in → the pick announced → on the
+  clock: <next team>" across the window.
 - **`PAUSED`** — admin-held; the clock is frozen (deadline recomputed on resume).
 - **`COMPLETE`** — all `rounds × teams` picks made; board view + export available.
 
@@ -431,9 +460,9 @@ stateDiagram-v2
 
 On `SUBMIT_PICK` (or auto-pick), the authority emits **one** `PICK_MADE` broadcast carrying the completed
 pick, the next team, and `announceUntil = now + waitingSec`, and enters the `PICK_IN` lockout — **no pick
-clock, all picks rejected**. A one-shot schedule armed at `announceUntil` fires `ANNOUNCE_DONE`, which flips
-`PICK_IN → ON_CLOCK`, sets the next team's `pickDeadline = now + timerSec`, and broadcasts the fresh clock
-via `SYNC`. Only then can the next team draft. A client that refreshes mid-window recovers the pending
+clock, all picks rejected**. A client `TIMER_NUDGE` at `announceUntil` (backstopped by a one-shot schedule)
+fires `ANNOUNCE_DONE`, which flips `PICK_IN → ON_CLOCK`, sets the next team's `pickDeadline = now + timerSec`,
+and broadcasts the fresh clock via `SYNC`. Only then can the next team draft. A client that refreshes mid-window recovers the pending
 announcement and `announceUntil` from the state snapshot; the last pick skips the lockout and goes straight
 to `COMPLETE`.
 

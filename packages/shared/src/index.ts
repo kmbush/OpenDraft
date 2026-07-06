@@ -6,3 +6,4 @@ export * from './pool.js';
 export * from './league.js';
 export * from './constants.js';
 export * from './reveal.js';
+export * from './timed.js';

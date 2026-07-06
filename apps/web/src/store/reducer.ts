@@ -78,6 +78,10 @@ function applyReject(
   state: LiveState,
   message: Extract<OutboundMessage, { type: 'REJECT' }>,
 ): LiveState {
+  // TOO_EARLY only ever answers a TIMER_NUDGE — an internal "keep waiting" signal,
+  // never user-actionable. Swallow it so it never surfaces as a station notice or
+  // rolls back an unrelated optimistic pick (AD-1).
+  if (message.payload.code === 'TOO_EARLY') return state;
   return {
     ...state,
     optimistic: null,

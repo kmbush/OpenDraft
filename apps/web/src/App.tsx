@@ -11,6 +11,7 @@
 import { useEffect } from 'react';
 import { AppHeader } from './components/app-header.js';
 import { useLeague } from './hooks/useLeague.js';
+import { useTimerNudge } from './hooks/useTimerNudge.js';
 import { applyTheme } from './lib/theme.js';
 import { AdminView } from './views/AdminView.js';
 import { BoardView } from './views/BoardView.js';
@@ -32,6 +33,9 @@ export function App() {
   // every route (the chrome-free board needs it too), before the route branch.
   const accent = useLeague()?.theme?.colors?.accent;
   useEffect(() => applyTheme(accent), [accent]);
+
+  // Any connected screen nudges timed transitions (AD-1); the server dedupes.
+  useTimerNudge();
 
   const route = currentRoute();
   if (route === 'board') return <BoardView />;
