@@ -99,8 +99,8 @@ it('runs a full draft incl. an auto-pick, end to end', async () => {
   )) as Extract<OutboundMessage, { type: 'SYNC' }>;
 
   // After START the draft is immediately draftable: a team is on the clock and
-  // the state references a pool the station can render (the bug Kyle hit was a
-  // draft created with no pool, leaving the station blank).
+  // the state references a pool the station can render (a draft created with no
+  // pool would leave the station blank).
   expect(started.payload.state.pointer).toBe(1);
   expect(started.payload.state.poolSnapshotId).toBe('bundled');
 

@@ -8,7 +8,7 @@ import type { DraftEvent, Position, Reject, RejectCode } from '@opendraft/shared
 
 /**
  * Inbound envelope. Matches the shared outbound envelope shape plus an
- * inbound-only optional `token` carrying the admin session (see flag in report).
+ * inbound-only optional `token` carrying the admin session.
  */
 export interface InboundEnvelope {
   type: string;

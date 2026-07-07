@@ -646,7 +646,7 @@ function Setup({ seed }: { seed: SetupSeed }) {
               className="text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
             />
             <p className="text-xs text-muted-foreground">
-              PNG or SVG, under 40 KB — stored inline for now (S3 hosting is deferred).
+              PNG or SVG, under 40 KB — embedded directly in the league.
             </p>
           </div>
           {logoError && (

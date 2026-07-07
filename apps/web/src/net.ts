@@ -68,8 +68,8 @@ export function connect(draftId: string, role = 'station'): void {
       const parsed = JSON.parse(String(event.data)) as { type?: unknown };
       // Only dispatch real server messages. API Gateway control/error frames
       // (e.g. {"message":"Internal server error"}) carry no `type` — drop them so
-      // they can't reach the store reducer at all (belt-and-suspenders alongside
-      // the reducer's own default case).
+      // they can't reach the store reducer at all. The reducer's default case is a
+      // second guard for any that slip through.
       if (parsed && typeof parsed.type === 'string') {
         useLiveStore.getState().handleInbound(parsed as OutboundMessage);
       }

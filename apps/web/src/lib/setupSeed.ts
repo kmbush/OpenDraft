@@ -46,7 +46,7 @@ export interface SetupSeed {
   logoData: string;
 }
 
-/** The ship default seed — the first-run setup form (matches the prior hardcoded state). */
+/** The ship default seed — the first-run setup form. */
 export const DEFAULT_SETUP_SEED: SetupSeed = {
   name: 'My League',
   teams: 10,

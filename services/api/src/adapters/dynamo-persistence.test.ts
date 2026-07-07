@@ -78,7 +78,7 @@ describe('diffPickItems', () => {
     expect(diff.deletes).toEqual([]);
   });
 
-  it('reassign (teamSlot only): one Put — the regression the old player-only compare missed', () => {
+  it('reassign (teamSlot only): one Put — a same-player teamSlot change still persists', () => {
     const prev = withPicks([pick(1, { teamSlot: 1 }), pick(2)]);
     const next = withPicks([pick(1, { teamSlot: 2 }), pick(2)]);
     const diff = diffPickItems(prev, next, LEAGUE, DRAFT);

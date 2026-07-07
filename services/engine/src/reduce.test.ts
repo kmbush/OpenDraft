@@ -19,7 +19,7 @@ function submit(state: DraftState, ctx: ReduceContext, playerId: string, positio
 
 /**
  * Land a pick AND clear the announcement lockout (PICK_IN → ON_CLOCK) so the next
- * team is live — the way real fixtures advance now that picks are rejected during
+ * team is live — the way real fixtures advance, since picks are rejected during
  * the lockout. Returns the resulting state (COMPLETE picks skip the lockout).
  */
 function place(state: DraftState, ctx: ReduceContext, playerId: string, position: Position) {

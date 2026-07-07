@@ -18,7 +18,7 @@ export async function fanOut(deps: Deps, message: OutboundMessage): Promise<void
 }
 
 /**
- * Arm or cancel the one-shot timer to match the new state. It is now a **backstop**
+ * Arm or cancel the one-shot timer to match the new state. It is a **backstop**
  * (DESIGN AD-1): a present client nudges first, so the scheduler only ever fires
  * when no client is watching — its ~1–2 min latency is invisible by definition. It
  * fires at each timed state's `honorDeadline` (reveal end → REVEAL_DONE, `liveAt` →

@@ -4,7 +4,7 @@
  * when a live fetch fails or the endpoint changes (AD-5).
  *
  * This is the impure edge (network, clock, fs) — the builder it calls stays pure.
- * S3 upload is deferred to the infra/api unit; for now we write to disk.
+ * It writes the snapshot to disk; publishing it to S3 belongs to the infra/api unit.
  *
  * Run: `pnpm --filter @opendraft/pool build:snapshot`
  */
