@@ -3,3 +3,6 @@ dist/
 coverage/
 *.tsbuildinfo
 .DS_Store
+
+# Local exports / generated artifacts
+opendraft-overview.pdf
