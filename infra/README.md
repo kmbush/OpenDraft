@@ -157,9 +157,9 @@ it anywhere `bcryptjs` is installed.)
 
 ---
 
-## 4. Deploy the web bundle (later — the app doesn't exist yet)
+## 4. Deploy the web bundle
 
-The web bucket + CloudFront distribution are provisioned empty. Once `apps/web` is built:
+The web bucket + CloudFront distribution are provisioned empty. Build `apps/web`, then upload it:
 
 ```bash
 aws s3 sync apps/web/dist "s3://$(terraform output -raw web_bucket)/" --delete

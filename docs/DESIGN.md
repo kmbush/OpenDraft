@@ -3,7 +3,8 @@
 > Living design doc. This is the source of truth for architecture decisions.
 > Every decision records **what was chosen, what was rejected, and why.**
 >
-> Status: Kickoff / pre-implementation. Owner: project maintainer. Last updated: 2026-07-03.
+> Status: **MVP implemented** — the core draft flow (setup, live draft, admin console, reveal,
+> theming, PDF export) is built and runnable end-to-end. Owner: project maintainer. Last updated: 2026-07-07.
 
 ---
 
