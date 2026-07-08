@@ -79,6 +79,42 @@ CONVENTIONS.md       Coding standards
 Self-host on your own AWS account with Terraform. See [`infra/README.md`](infra/README.md) for the
 deployment runbook.
 
+### Deploying your own instance — what stays private
+
+This repository is **deployment-agnostic on purpose**: it contains no account IDs, domains, secrets, or
+Terraform state. Everything specific to *your* instance lives outside the repo. Keep it that way — split
+your deployment into three tiers by sensitivity:
+
+**1. Non-secret config → your own private repo.** Create a private repo (e.g. `opendraft-deploy`) holding
+the values that configure *your* stack but should never ship in the public code:
+
+```
+opendraft-deploy/
+  prod.auto.tfvars     # env, region, league_id, domain_name, acm_certificate_arn
+  backend.hcl          # your S3 backend bucket/key/region (see infra/backend.tf)
+  .env.production       # VITE_* values, taken from `terraform output`
+  set-secrets.sh        # commands that push secrets to SSM — not the secrets themselves
+  RUNBOOK.md            # your deploy steps, DNS notes, gotchas
+```
+
+Point Terraform at this repo's `infra/` and feed it your private vars:
+`terraform apply -var-file=../opendraft-deploy/prod.auto.tfvars`.
+
+**2. Actual secrets → SSM Parameter Store (SecureString) + a password manager.** Never commit
+`admin_passcode_hash` or `session_hmac_key` — not even to the private repo. The root Terraform variables
+default to `REPLACE_ME_*` placeholders and expect the real values to be set out-of-band after `apply`
+(see [`infra/README.md`](infra/README.md)). Store the plaintext only in your vault; keep the *script* that
+sets them in the private repo, not the values.
+
+**3. Terraform state → a private, encrypted, versioned S3 backend.** State files embed account IDs, ARNs,
+and sometimes secrets, so they must never be public. The default backend is local (state on your laptop);
+[`infra/backend.tf`](infra/backend.tf) documents the exact one-time migration to an S3 + DynamoDB-lock
+backend — recommended once you run a real draft, so state is durable and not tied to one machine.
+
+Guard rails already in place: `infra/.gitignore` excludes `*.tfstate`, `*.auto.tfvars`, and `.terraform/`;
+`.gitignore` excludes `.env` and build artifacts. `terraform.tfvars.example` and `apps/web/.env.example`
+show every value as a placeholder — copy them, fill in your own, and keep the copies out of this repo.
+
 ## Status & roadmap
 
 MVP is working end-to-end (setup, live draft, admin console, reveal, theming, PDF). Multi-tenant SaaS is
@@ -86,6 +122,7 @@ designed-for but deferred. Full phase breakdown in [`docs/DESIGN.md`](docs/DESIG
 
 ## License
 
-TBD (open source).
+**[MIT](LICENSE).** Use, modify, self-host, and share OpenDraft freely, including in commercial projects —
+just keep the copyright notice. Provided as-is, without warranty. See [`LICENSE`](LICENSE) for the full text.
 </content>
 </invoke>
