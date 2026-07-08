@@ -1,5 +1,8 @@
 # OpenDraft
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/kmbush/OpenDraft/actions/workflows/ci.yml/badge.svg)](https://github.com/kmbush/OpenDraft/actions/workflows/ci.yml)
+
 **Open-source draft tool for in-person fantasy football leagues.** Run your league's annual draft in the
 room — on the big screen and on laptops at the table — self-hosted on AWS. Modeled loosely on Sleeper's
 conventions.
@@ -8,6 +11,24 @@ conventions.
 > theming, and PDF export are built and runnable end-to-end with a local no-AWS harness. Architecture and
 > rationale live in [`docs/DESIGN.md`](docs/DESIGN.md); coding standards in [`CONVENTIONS.md`](CONVENTIONS.md).
 > To run a real draft, see [`docs/RUNNING-A-DRAFT.md`](docs/RUNNING-A-DRAFT.md).
+
+## Screenshots
+
+**The draft board (TV):** a broadcast-style stage with a live countdown ring, on-deck queue, and a
+recent-picks rail — plus a full-screen "the pick is in" takeover between picks.
+
+![Draft board — on the clock](docs/images/board.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/station.png" alt="Player station" /><br /><sub><b>Player station (laptop)</b> — picks for whoever is on the clock; players listed by position only, never by rank/ADP.</sub></td>
+    <td width="50%"><img src="docs/images/admin.png" alt="Commissioner console" /><br /><sub><b>Commissioner console</b> — live status, per-team rosters, and mid-draft controls (undo, rewind, reassign).</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/export.png" alt="Export board" /><br /><sub><b>Post-draft board</b> — a print-ready, themeable grid you can save as PDF.</sub></td>
+    <td width="50%"><img src="docs/images/board-announce.png" alt="The pick is in" /><br /><sub><b>The announcement</b> — the board takes over the room after every pick.</sub></td>
+  </tr>
+</table>
 
 ## What it does
 
@@ -48,6 +69,8 @@ the browser.
 ## Local dev quickstart (no AWS)
 
 A local harness runs the whole draft on `localhost` with in-memory adapters — timer auto-picks and all.
+
+**Prerequisites:** Node 20+ and pnpm 9+.
 
 ```sh
 pnpm install
@@ -119,6 +142,13 @@ show every value as a placeholder — copy them, fill in your own, and keep the 
 
 MVP is working end-to-end (setup, live draft, admin console, reveal, theming, PDF). Multi-tenant SaaS is
 designed-for but deferred. Full phase breakdown in [`docs/DESIGN.md`](docs/DESIGN.md#13-phased-roadmap).
+
+## Contributing
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow, and
+[`CONVENTIONS.md`](CONVENTIONS.md) for coding standards and the project's hard invariants. Be excellent to
+each other ([`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)); report security issues privately per
+[`SECURITY.md`](SECURITY.md).
 
 ## License
 
