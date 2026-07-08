@@ -3,14 +3,14 @@
 > Living design doc. This is the source of truth for architecture decisions.
 > Every decision records **what was chosen, what was rejected, and why.**
 >
-> Status: Kickoff / pre-implementation. Owner: Kyle. Last updated: 2026-07-03.
+> Status: Kickoff / pre-implementation. Owner: project maintainer. Last updated: 2026-07-03.
 
 ---
 
 ## 1. System Overview & Goals
 
 **OpenDraft** is an open-source tool for **in-person ("offline") fantasy football leagues** to run their
-annual draft. It is modeled loosely on Sleeper's conventions. The owner (Kyle) self-hosts it on AWS.
+annual draft. It is modeled loosely on Sleeper's conventions. The owner self-hosts it on AWS.
 
 ### The three pillars
 
@@ -361,7 +361,7 @@ last-instant `SUBMIT_PICK` (which has no time-gate) beats the auto-pick.
 require shipping rank — violates AD-6, and defeats the anti-influence intent); auto-pick strictly by roster
 need order (more surprising/less fun than random, and deterministic gaming).
 
-**Why.** Kyle's call: expiry must actually advance the draft, and the pick should be **random but sane** —
+**Why.** Maintainer's call: expiry must actually advance the draft, and the pick should be **random but sane** —
 never an illegal roster addition. Randomness (not rank-based) keeps it fun and keeps us rank-free.
 Legality needs **per-position maximums** in the draft settings (§4); the engine computes the legal set as
 `available ∩ positionsWithRemainingCapacity(team)`. Edge case: if every position is capped (total capacity
@@ -475,7 +475,7 @@ Single-sourced in `services/engine`; used by both server (authority) and client 
 
 ### 5.4 Admin actions
 
-A **robust admin console ships in MVP** (Kyle's call), not just a single undo:
+A **robust admin console ships in MVP** (maintainer's call), not just a single undo:
 - **UNDO (multi-step)** — roll back the last *N* picks. Each undo pops the latest pick (conditional on
   current `version`), **decrements the pointer**, returns the player to the pool, and re-arms the correct
   team's clock. Because picks are an append-only log, undo is "delete the tail item, rewind the pointer,"
@@ -692,19 +692,19 @@ possible warm tier (revisit AD-1).
 
 ## 14. Open Questions & Risks
 
-### Resolved (Kyle, 2026-07-03)
+### Resolved (2026-07-03)
 1. **Timer expiry** — ✅ **Auto-pick a random *legal* player** (respecting position maxes) on zero. Build in
    MVP via the EventBridge one-shot (AD-1, AD-11).
 2. **Pool scope** — ✅ Filter out players who no longer play; keep roughly the **top ~300–500 by rank, rank
    stripped** from the served data (AD-5/AD-6).
 3. **Redraft only for MVP** — ✅ Yes. **But build the data model to accommodate keepers/dynasty later** (§4).
 4. **Snake/linear only** — ✅ Yes, no auction in MVP.
-7. **Domain/TLS** — ✅ Kyle brings a **custom domain** for his own deploy; other self-hosters choose their
+7. **Domain/TLS** — ✅ The maintainer brings a **custom domain** for their own deploy; other self-hosters choose their
    own. **Custom domain is optional** — the default CloudFront domain works out of the box.
 8. **Offline extent** — ✅ **Flaky-wifi resilience is enough** (reconnect + cached pool). Full LAN-offline
    mode stays deferred (Risk R-5), not built.
 
-### Resolved (Kyle, round 2)
+### Resolved (round 2)
 5. **Pick trading** — ✅ **Omitted from MVP.**
 6. **Stations model** — ✅ **One shared laptop** cycles through players; **additional/remote clients may also
    connect** and pick. Stations are **not team-bound**; the server accepts a pick only for the on-clock team,

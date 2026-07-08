@@ -130,7 +130,7 @@ describe('draft setup CRUD', () => {
         body: {
           settings: minimalSettings(),
           teams: [
-            { name: 'Gridiron Gang', color: '#3b82f6', ownerLabel: 'Kyle' },
+            { name: 'Gridiron Gang', color: '#3b82f6', ownerLabel: 'Commish' },
             { color: 'nope' },
           ],
         },
@@ -138,7 +138,7 @@ describe('draft setup CRUD', () => {
     );
     expect(created.status).toBe(201);
     expect((created.body as { teams: unknown }).teams).toEqual([
-      { slot: 1, name: 'Gridiron Gang', color: '#3b82f6', ownerLabel: 'Kyle' },
+      { slot: 1, name: 'Gridiron Gang', color: '#3b82f6', ownerLabel: 'Commish' },
       { slot: 2, name: 'Team 2', color: '#64748b' },
     ]);
   });

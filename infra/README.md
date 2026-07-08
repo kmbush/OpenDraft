@@ -42,7 +42,7 @@ infra/
 - **Terraform** ≥ 1.6 (`terraform version`). This module was validated with 1.9.8.
   Not installed? `curl -fsSLo tf.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip && unzip tf.zip && sudo mv terraform /usr/local/bin/`
 - **Node 20** for the esbuild bundling step. This repo uses nvm: `nvm use 20`.
-- **AWS credentials** with permission to create the resources (Kyle runs `apply`).
+- **AWS credentials** with permission to create the resources (the operator runs `apply`).
 - Region defaults to **us-east-1**. If you use a custom domain, its ACM cert **must** be in us-east-1
   (CloudFront requirement) regardless of `var.region`.
 
