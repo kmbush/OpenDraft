@@ -1,7 +1,7 @@
 # OpenDraft
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/kmbush/OpenDraft/actions/workflows/ci.yml/badge.svg)](https://github.com/kmbush/OpenDraft/actions/workflows/ci.yml)
+[![CI](https://github.com/kmbush/OpenDraft/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kmbush/OpenDraft/actions/workflows/ci.yml)
 
 **Open-source draft tool for in-person fantasy football leagues.** Run your league's annual draft in the
 room — on the big screen and on laptops at the table — self-hosted on AWS. Modeled loosely on Sleeper's
