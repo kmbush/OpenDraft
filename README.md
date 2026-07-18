@@ -141,7 +141,8 @@ show every value as a placeholder — copy them, fill in your own, and keep the 
 ## Status & roadmap
 
 MVP is working end-to-end (setup, live draft, admin console, reveal, theming, PDF). Multi-tenant SaaS is
-designed-for but deferred. Full phase breakdown in [`docs/DESIGN.md`](docs/DESIGN.md#13-phased-roadmap).
+designed-for but deferred. Full phase breakdown in [`docs/DESIGN.md`](docs/DESIGN.md#13-phased-roadmap);
+granular in-flight and proposed work is tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md).
 
 ## Contributing
 
