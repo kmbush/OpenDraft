@@ -61,6 +61,11 @@ output "cloudfront_domain_name" {
   value       = module.s3_cloudfront.distribution_domain_name
 }
 
+output "acm_certificate_arn" {
+  description = "The us-east-1 ACM cert fronting the custom domain: the Terraform-managed cert when route53_zone_name is set, else the BYO var.acm_certificate_arn (empty on a default CloudFront-domain deploy)."
+  value       = local.effective_acm_certificate_arn
+}
+
 output "scheduler_group_name" {
   description = "EventBridge Scheduler group (SCHEDULER_GROUP_NAME)."
   value       = module.scheduler.group_name

@@ -26,6 +26,15 @@ league_id = "opendraft"
 
 # --- Custom domain (optional) ---
 # Leave empty to use the default *.cloudfront.net domain.
+#
+# Option A — Route53 in this account (fully automated, recommended). Set the
+# domain plus the hosted zone that owns it; Terraform requests + DNS-validates
+# the us-east-1 ACM cert and creates the A/AAAA alias to CloudFront. No cert ARN.
+# domain_name       = "draft.example.com"
+# route53_zone_name = "example.com"
+#
+# Option B — bring your own cert (DNS managed elsewhere). Pre-create + validate
+# a us-east-1 ACM cert, add the alias record yourself, and pass the ARN here.
 # domain_name         = "draft.example.com"
 # acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxx"  # MUST be us-east-1
 

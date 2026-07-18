@@ -26,13 +26,15 @@ module "scheduler" {
 }
 
 module "s3_cloudfront" {
-  source              = "./modules/s3-cloudfront"
-  name_prefix         = local.name_prefix
-  pool_bucket_name    = local.pool_bucket_name
-  web_bucket_name     = local.web_bucket_name
-  pool_prefix         = var.pool_prefix
-  domain_name         = var.domain_name
-  acm_certificate_arn = var.acm_certificate_arn
+  source           = "./modules/s3-cloudfront"
+  name_prefix      = local.name_prefix
+  pool_bucket_name = local.pool_bucket_name
+  web_bucket_name  = local.web_bucket_name
+  pool_prefix      = var.pool_prefix
+  domain_name      = var.domain_name
+  # BYO cert (var.acm_certificate_arn) or the Terraform-managed one from dns.tf
+  # when a Route53 zone is configured.
+  acm_certificate_arn = local.effective_acm_certificate_arn
 }
 
 module "apigw_ws" {

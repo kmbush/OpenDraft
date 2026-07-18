@@ -98,7 +98,8 @@ Key variables (all have defaults — see `variables.tf`):
 | `lambda_memory_mb`   | `256`          | |
 | `log_retention_days` | `14`           | |
 | `domain_name`        | `""`           | optional custom domain (else CloudFront default) |
-| `acm_certificate_arn`| `""`           | required with `domain_name`; **must be us-east-1** |
+| `route53_zone_name`  | `""`           | Route53 zone owning `domain_name` → Terraform manages cert + DNS (see below) |
+| `acm_certificate_arn`| `""`           | bring-your-own us-east-1 cert; used only when `route53_zone_name` is empty |
 
 Useful outputs after apply: `ws_client_url`, `http_api_endpoint`, `cloudfront_domain_name`,
 `web_bucket`, `cloudfront_distribution_id`, `pool_bucket`, `ssm_passcode_hash_param`, `ssm_hmac_key_param`.
@@ -132,6 +133,32 @@ export VITE_LEAGUE_ID=$(terraform output -raw league_id)
 > Chicken-and-egg: the CloudFront domain isn't known until the first `apply`, but the default CORS
 > allow-list derives from it within the **same** apply (no cycle — CloudFront doesn't depend on the HTTP
 > API). If you front the app with a custom domain, set `domain_name` and it's added to the allow-list too.
+
+### Custom domain
+
+Two ways to front the app with your own domain instead of `*.cloudfront.net`:
+
+**A. Route53 in this account (fully automated — recommended).** Set both `domain_name` and
+`route53_zone_name` (the hosted zone that owns it). Terraform then does everything (`dns.tf`): requests an
+ACM cert for the domain in **us-east-1** (CloudFront's required region, via an aliased provider), writes the
+DNS validation record into the zone and waits for issuance, attaches the cert to the distribution, and
+creates the `A`/`AAAA` alias from your domain to CloudFront. No cert ARN, no console steps.
+
+```hcl
+domain_name       = "opendraft.example.com"
+route53_zone_name = "example.com"
+```
+
+**B. Bring your own cert (DNS elsewhere).** If your DNS isn't in this account's Route53, pre-create and
+validate a us-east-1 ACM cert, pass its ARN as `acm_certificate_arn` with `domain_name`, and add the alias
+record at your DNS provider yourself pointing to `cloudfront_domain_name`.
+
+Either way, `web_url`, `pool_base_url`, and the CORS allow-list flip to the custom domain automatically — so
+after enabling a custom domain you must **rebuild `apps/web`** (the origin is baked into the Vite bundle at
+build time) and re-run step 4. The `acm_certificate_arn` output echoes the effective cert in use.
+
+> DNS/CloudFront propagation on the first cutover can take several minutes (cert validation + the alias
+> going live at the edges). A fresh distribution/cert is the slow case; subsequent applies are quick.
 
 ---
 

@@ -28,6 +28,11 @@ output "distribution_domain_name" {
   value       = aws_cloudfront_distribution.this.domain_name
 }
 
+output "distribution_hosted_zone_id" {
+  description = "CloudFront's Route53 hosted-zone id (the alias target for a custom-domain A/AAAA record)."
+  value       = aws_cloudfront_distribution.this.hosted_zone_id
+}
+
 output "distribution_arn" {
   description = "CloudFront distribution ARN."
   value       = aws_cloudfront_distribution.this.arn

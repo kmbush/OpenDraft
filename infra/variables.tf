@@ -75,7 +75,13 @@ variable "domain_name" {
 }
 
 variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for var.domain_name. MUST be in us-east-1 (CloudFront requirement). Required only if domain_name is set."
+  description = "Bring-your-own ACM certificate ARN for var.domain_name. MUST be in us-east-1 (CloudFront requirement). Used only when var.route53_zone_name is empty; when a Route53 zone is set, Terraform requests and validates the cert itself and this is ignored."
+  type        = string
+  default     = ""
+}
+
+variable "route53_zone_name" {
+  description = "Route53 public hosted-zone name that owns var.domain_name (e.g. \"example.com\" for draft.example.com). Set it (with domain_name) to have Terraform fully manage TLS + DNS: request the us-east-1 ACM cert, DNS-validate it in this zone, and create the A/AAAA alias to CloudFront — no click-ops, no bring-your-own cert. Leave empty to use the var.acm_certificate_arn path instead. The zone must already exist in this AWS account."
   type        = string
   default     = ""
 }
