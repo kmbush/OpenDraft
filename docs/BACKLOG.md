@@ -13,6 +13,9 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 - [ ] **Countdown circle stutters on the draft board** `bug` — the on-the-clock timer ring animates
   choppily at times; it should sweep smoothly. Likely a re-render/rAF or SVG stroke-dash cadence issue in
   `BoardView`, not the clock math. Target: buttery countdown on the big screen.
+- [ ] **Recent-picks count should scale with window size** `bug` — the board shows a fixed number of recent
+  picks regardless of viewport, so large screens waste space and small ones overflow/clip. Make the number
+  of recent picks responsive to the available height/width (`BoardView`).
 
 ## Onboarding & connection UX
 
