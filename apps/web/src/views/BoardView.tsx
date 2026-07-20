@@ -350,10 +350,7 @@ function RecentPicks({
   teamName: (slot: number) => string;
   colorOf: (slot: number) => string;
 }) {
-  const [listRef, capacity] = useRowCapacity<HTMLOListElement>(
-    RECENT_PICKS_FALLBACK,
-    allPicks.length,
-  );
+  const [listRef, capacity] = useRowCapacity<HTMLOListElement>(RECENT_PICKS_FALLBACK);
   // Exactly `capacity` rows — never an extra one cropped mid-row, which is the
   // clipping this is meant to fix. Capacity is always ≥ 1, so the measurement in
   // `useRowCapacity` still has a row to read.

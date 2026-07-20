@@ -5,9 +5,9 @@
  *
  * Row height is measured from the first rendered row rather than assumed, so font
  * scaling and style changes stay honest. Until a row exists (empty list, first
- * paint) the caller's fallback stands in; the observer corrects it on the next frame.
+ * paint) the caller's fallback stands in.
  */
-import { type RefObject, useEffect, useRef, useState } from 'react';
+import { type RefCallback, useCallback, useRef, useState } from 'react';
 
 export function rowCapacity(containerPx: number, rowPx: number): number {
   if (containerPx <= 0 || rowPx <= 0) return 0;
@@ -15,34 +15,35 @@ export function rowCapacity(containerPx: number, rowPx: number): number {
 }
 
 /**
- * `revision` should change whenever the list's contents do — the observer alone
- * can't see the first row arriving into an empty list, because the list box
- * itself never changes size when a child is added to it.
+ * Returns a ref callback to put on the list element, plus how many rows fit.
+ *
+ * A ref callback rather than a ref object because the list is mounted lazily —
+ * a rail with nothing in it yet renders an empty state instead, so there is no
+ * element to observe until the first row arrives. The callback fires on that
+ * mount; an effect with a dependency array would either miss it or need a
+ * synthetic "contents changed" dependency it never actually reads.
  */
-export function useRowCapacity<T extends HTMLElement>(
-  fallback: number,
-  revision: unknown,
-): [RefObject<T | null>, number] {
-  const ref = useRef<T | null>(null);
+export function useRowCapacity<T extends HTMLElement>(fallback: number): [RefCallback<T>, number] {
   const [capacity, setCapacity] = useState(fallback);
+  const detach = useRef<(() => void) | null>(null);
 
-  useEffect(() => {
-    const el = ref.current;
+  const attach = useCallback((el: T | null) => {
+    detach.current?.();
+    detach.current = null;
     if (!el) return;
     const measure = () => {
       const row = el.firstElementChild;
       if (!row) return;
-      const rowPx = row.getBoundingClientRect().height;
-      const next = rowCapacity(el.clientHeight, rowPx);
-      // Only commit real changes — this runs inside a ResizeObserver, and writing
-      // an identical value every observation would loop.
+      const next = rowCapacity(el.clientHeight, row.getBoundingClientRect().height);
+      // Only commit real changes: this runs from a ResizeObserver, and a state
+      // write on every observation would re-render in a loop.
       if (next > 0) setCapacity((prev) => (prev === next ? prev : next));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [revision]);
+    detach.current = () => observer.disconnect();
+  }, []);
 
-  return [ref, capacity];
+  return [attach, capacity];
 }
