@@ -10,12 +10,19 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Bugs
 
-- [ ] **Countdown circle stutters on the draft board** `bug` — the on-the-clock timer ring animates
-  choppily at times; it should sweep smoothly. Likely a re-render/rAF or SVG stroke-dash cadence issue in
-  `BoardView`, not the clock math. Target: buttery countdown on the big screen.
-- [ ] **Recent-picks count should scale with window size** `bug` — the board shows a fixed number of recent
-  picks regardless of viewport, so large screens waste space and small ones overflow/clip. Make the number
-  of recent picks responsive to the available height/width (`BoardView`).
+*(none open — see "Recently shipped" below.)*
+
+## Recently shipped
+
+- [x] **Countdown circle stutters on the draft board** `bug` — the ring rode the 250ms `useTicker`
+  re-render with a 0.25s CSS transition papering over the gap; when the main thread was busy the interval
+  drifted, transitions restarted mid-flight, and the sweep lurched. Now driven by `useCountdownSweep`, a rAF
+  loop writing `stroke-dashoffset` on a ref — no re-renders, still deadline-derived (AD-1). Measured under
+  simulated main-thread contention: stalled frames 89% → 1%, velocity CV 2.91 → 0.34. (Idle browsers never
+  reproduced it, which is why it read as intermittent.)
+- [x] **Recent-picks count should scale with window size** `bug` — the rail was hard-coded to 8 picks. Now
+  `useRowCapacity` measures the list box and its actual row height (ResizeObserver) and renders exactly the
+  rows that fit. Verified: 8 rows @1366×768, 12 @1920×1080, 17 @2560×1440, with no row clipped at any size.
 
 ## Onboarding & connection UX
 

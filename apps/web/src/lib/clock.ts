@@ -24,6 +24,22 @@ export function remainingMs(
   return Math.max(0, pickDeadline - estimatedServerNow(clientNow, offsetMs));
 }
 
+/**
+ * Fraction of the pick clock still on the board, clamped to [0,1] — what a
+ * countdown ring sweeps. `remainingMs` already floors at 0, so only the top end
+ * needs clamping (a deadline further out than one full clock, e.g. right after a
+ * timer nudge, must not overdraw the ring).
+ */
+export function clockFraction(
+  pickDeadline: number | undefined,
+  offsetMs: number,
+  clientNow: number,
+  timerMs: number,
+): number {
+  if (timerMs <= 0) return 0;
+  return Math.min(1, remainingMs(pickDeadline, offsetMs, clientNow) / timerMs);
+}
+
 /** `m:ss` for display. */
 export function formatClock(ms: number): string {
   const totalSeconds = Math.ceil(ms / 1000);

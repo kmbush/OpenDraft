@@ -19,9 +19,11 @@ import { type ReactNode, useMemo } from 'react';
 import { BrandMark } from '../components/brand-mark.js';
 import { Confetti } from '../components/confetti.js';
 import { PositionBadge } from '../components/position-badge.js';
+import { useCountdownSweep } from '../hooks/useCountdownSweep.js';
 import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
+import { useRowCapacity } from '../hooks/useRowCapacity.js';
 import { useTicker } from '../hooks/useTicker.js';
-import { formatClock, remainingMs } from '../lib/clock.js';
+import { clockFraction, formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
 import { teamColor } from '../lib/teams.js';
 import { useLiveStore } from '../store/store.js';
@@ -38,6 +40,9 @@ import { RevealShow } from './reveal.js';
 const BEAT_PAUSE = 0.3;
 const BEAT_REVEAL = 0.4;
 const BEAT_ONCLOCK = 0.75;
+
+/** Recent-picks rows to show before the rail has measured itself (first paint). */
+const RECENT_PICKS_FALLBACK = 8;
 
 type AnnounceBeat = 'pickIn' | 'pause' | 'reveal' | 'onClock';
 
@@ -86,20 +91,30 @@ function TeamDot({ color, className }: { color: string; className?: string }) {
   );
 }
 
-/** Giant depleting countdown ring with mm:ss at its core. */
+/**
+ * Giant depleting countdown ring with mm:ss at its core. The sweep runs off its
+ * own rAF loop straight from the deadline (`useCountdownSweep`) rather than the
+ * 250ms ticker, so it glides on the big screen; only the label rides the ticker.
+ */
 function CountdownRing({
-  fraction,
+  deadline,
+  serverOffsetMs,
+  timerMs,
   label,
   color,
   urgent,
 }: {
-  fraction: number;
+  deadline: number | undefined;
+  serverOffsetMs: number;
+  timerMs: number;
   label: string;
   color: string;
   urgent: boolean;
 }) {
   const r = 150;
   const c = 2 * Math.PI * r;
+  const sweepRef = useCountdownSweep(deadline, serverOffsetMs, timerMs, c);
+  const initialOffset = c * (1 - clockFraction(deadline, serverOffsetMs, Date.now(), timerMs));
   return (
     <div
       className={cn('relative aspect-square', urgent && 'animate-clock-pulse')}
@@ -120,6 +135,7 @@ function CountdownRing({
           strokeWidth="16"
         />
         <circle
+          ref={sweepRef}
           cx="170"
           cy="170"
           r={r}
@@ -128,11 +144,8 @@ function CountdownRing({
           strokeWidth="16"
           strokeLinecap="round"
           strokeDasharray={c}
-          strokeDashoffset={c * (1 - Math.max(0, Math.min(1, fraction)))}
-          style={{
-            transition: 'stroke-dashoffset 0.25s linear',
-            filter: `drop-shadow(0 0 10px ${color}88)`,
-          }}
+          strokeDashoffset={initialOffset}
+          style={{ filter: `drop-shadow(0 0 10px ${color}88)` }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -225,7 +238,9 @@ function ClockHero({
   accent,
   overall,
   round,
-  fraction,
+  deadline,
+  serverOffsetMs,
+  timerMs,
   clockLabel,
   color,
   urgent,
@@ -234,7 +249,9 @@ function ClockHero({
   accent: string;
   overall: number;
   round: number;
-  fraction: number;
+  deadline: number | undefined;
+  serverOffsetMs: number;
+  timerMs: number;
   clockLabel: string;
   color: string;
   urgent: boolean;
@@ -262,7 +279,14 @@ function ClockHero({
         round <span className="font-bold text-white">{round}</span>
       </p>
       <div className="mt-2">
-        <CountdownRing fraction={fraction} label={clockLabel} color={color} urgent={urgent} />
+        <CountdownRing
+          deadline={deadline}
+          serverOffsetMs={serverOffsetMs}
+          timerMs={timerMs}
+          label={clockLabel}
+          color={color}
+          urgent={urgent}
+        />
       </div>
     </div>
   );
@@ -307,19 +331,33 @@ function OnDeck({
   );
 }
 
+/**
+ * The live picks rail, newest first. How many rows it shows is measured from the
+ * space it actually has (`useRowCapacity`) — the board is a TV showpiece that runs
+ * on anything from a laptop to a 4K panel, and a fixed count either clips the last
+ * row or leaves a tall screen half empty.
+ */
 function RecentPicks({
-  picks,
+  allPicks,
   playerName,
   playerTeam,
   teamName,
   colorOf,
 }: {
-  picks: Pick[];
+  allPicks: Pick[];
   playerName: (id: string) => string;
   playerTeam: (id: string) => string;
   teamName: (slot: number) => string;
   colorOf: (slot: number) => string;
 }) {
+  const [listRef, capacity] = useRowCapacity<HTMLOListElement>(
+    RECENT_PICKS_FALLBACK,
+    allPicks.length,
+  );
+  // Exactly `capacity` rows — never an extra one cropped mid-row, which is the
+  // clipping this is meant to fix. Capacity is always ≥ 1, so the measurement in
+  // `useRowCapacity` still has a row to read.
+  const picks = useMemo(() => allPicks.slice(-capacity).reverse(), [allPicks, capacity]);
   return (
     <aside className="flex w-[clamp(300px,23vw,420px)] shrink-0 flex-col border-l border-white/10 bg-black/20">
       <h2 className="shrink-0 border-b border-white/10 px-6 py-5 text-sm font-black uppercase tracking-[0.3em] text-white/50">
@@ -328,7 +366,7 @@ function RecentPicks({
       {picks.length === 0 ? (
         <p className="px-6 py-8 text-sm text-white/40">Waiting for the first pick…</p>
       ) : (
-        <ol className="flex-1 overflow-hidden">
+        <ol ref={listRef} className="flex-1 overflow-hidden">
           {picks.map((pick, i) => (
             <li
               key={pick.overall}
@@ -781,7 +819,6 @@ export function BoardView() {
   const firstSlot = draft.order[0];
   const startingRemaining = remainingMs(draft.liveAt, serverOffsetMs, now);
 
-  const recent = draft.picks.slice(-8).reverse();
   const onDeck = onDeckPicks(draft, 3);
   const exportHref = `/export${state.draftId ? `?draft=${state.draftId}` : ''}`;
 
@@ -791,7 +828,6 @@ export function BoardView() {
   const urgent = remaining <= 10_000;
   const warning = remaining <= 30_000 && !urgent;
   const clockColor = urgent ? '#ef4444' : warning ? '#f59e0b' : onClockColor;
-  const fraction = timerMs > 0 ? remaining / timerMs : 0;
 
   return (
     <div
@@ -836,7 +872,7 @@ export function BoardView() {
         <div className="flex flex-1 overflow-hidden">
           <PausedHero teamName={onClockSlot ? teamName(onClockSlot) : '—'} color={onClockColor} />
           <RecentPicks
-            picks={recent}
+            allPicks={draft.picks}
             playerName={nameOf}
             playerTeam={playerTeam}
             teamName={teamName}
@@ -851,7 +887,9 @@ export function BoardView() {
               accent={onClockColor}
               overall={draft.pointer}
               round={liveRound}
-              fraction={fraction}
+              deadline={draft.pickDeadline}
+              serverOffsetMs={serverOffsetMs}
+              timerMs={timerMs}
               clockLabel={formatClock(remaining)}
               color={clockColor}
               urgent={urgent}
@@ -859,7 +897,7 @@ export function BoardView() {
             <OnDeck items={onDeck} teamName={teamName} colorOf={colorOf} />
           </div>
           <RecentPicks
-            picks={recent}
+            allPicks={draft.picks}
             playerName={nameOf}
             playerTeam={playerTeam}
             teamName={teamName}
