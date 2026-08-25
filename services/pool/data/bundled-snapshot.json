@@ -1,5 +1,5 @@
 {
-  "snapshotId": "2026-07-05",
+  "snapshotId": "2026-08-25",
   "source": "sleeper",
   "players": [
     {
@@ -9,6 +9,14 @@
       "position": "QB",
       "team": "BUF",
       "bye": 7
+    },
+    {
+      "id": "13272",
+      "firstName": "Carson",
+      "lastName": "Beck",
+      "position": "QB",
+      "team": "ARI",
+      "bye": 8
     },
     {
       "id": "3257",
@@ -25,6 +33,14 @@
       "position": "QB",
       "team": "CIN",
       "bye": 10
+    },
+    {
+      "id": "1166",
+      "firstName": "Kirk",
+      "lastName": "Cousins",
+      "position": "QB",
+      "team": "LV",
+      "bye": 8
     },
     {
       "id": "11566",
@@ -49,14 +65,6 @@
       "position": "QB",
       "team": "NYG",
       "bye": 14
-    },
-    {
-      "id": "7591",
-      "firstName": "Justin",
-      "lastName": "Fields",
-      "position": "QB",
-      "team": "KC",
-      "bye": 10
     },
     {
       "id": "3163",
@@ -97,14 +105,6 @@
       "position": "QB",
       "team": "IND",
       "bye": 11
-    },
-    {
-      "id": "7527",
-      "firstName": "Mac",
-      "lastName": "Jones",
-      "position": "QB",
-      "team": "SF",
-      "bye": 14
     },
     {
       "id": "7523",
@@ -179,14 +179,6 @@
       "bye": 12
     },
     {
-      "id": "13404",
-      "firstName": "Garrett",
-      "lastName": "Nussmeier",
-      "position": "QB",
-      "team": "KC",
-      "bye": 10
-    },
-    {
       "id": "11559",
       "firstName": "Michael",
       "lastName": "Penix",
@@ -211,14 +203,6 @@
       "bye": 14
     },
     {
-      "id": "9229",
-      "firstName": "Anthony",
-      "lastName": "Richardson",
-      "position": "QB",
-      "team": "IND",
-      "bye": 11
-    },
-    {
       "id": "96",
       "firstName": "Aaron",
       "lastName": "Rodgers",
@@ -230,6 +214,14 @@
       "id": "138",
       "firstName": "Ben",
       "lastName": "Roethlisberger",
+      "position": "QB",
+      "team": "PIT",
+      "bye": 5
+    },
+    {
+      "id": "4972",
+      "firstName": "Mason",
+      "lastName": "Rudolph",
       "position": "QB",
       "team": "PIT",
       "bye": 5
@@ -299,6 +291,14 @@
       "bye": 10
     },
     {
+      "id": "4017",
+      "firstName": "Deshaun",
+      "lastName": "Watson",
+      "position": "QB",
+      "team": "CLE",
+      "bye": 9
+    },
+    {
       "id": "11560",
       "firstName": "Caleb",
       "lastName": "Williams",
@@ -361,14 +361,6 @@
       "position": "RB",
       "team": "PHI",
       "bye": 9
-    },
-    {
-      "id": "11589",
-      "firstName": "Trey",
-      "lastName": "Benson",
-      "position": "RB",
-      "team": "ARI",
-      "bye": 8
     },
     {
       "id": "9225",
@@ -515,6 +507,14 @@
       "bye": 12
     },
     {
+      "id": "7528",
+      "firstName": "Najee",
+      "lastName": "Harris",
+      "position": "RB",
+      "team": "NYG",
+      "bye": 14
+    },
+    {
       "id": "12489",
       "firstName": "RJ",
       "lastName": "Harvey",
@@ -611,6 +611,14 @@
       "bye": 11
     },
     {
+      "id": "11581",
+      "firstName": "MarShawn",
+      "lastName": "Lloyd",
+      "position": "RB",
+      "team": "GB",
+      "bye": 5
+    },
+    {
       "id": "13287",
       "firstName": "Jeremiyah",
       "lastName": "Love",
@@ -641,14 +649,6 @@
       "position": "RB",
       "team": "SF",
       "bye": 14
-    },
-    {
-      "id": "9757",
-      "firstName": "Kendre",
-      "lastName": "Miller",
-      "position": "RB",
-      "team": "NO",
-      "bye": 11
     },
     {
       "id": "9511",
@@ -907,20 +907,20 @@
       "bye": 14
     },
     {
+      "id": "13413",
+      "firstName": "Cyrus",
+      "lastName": "Allen",
+      "position": "WR",
+      "team": "KC",
+      "bye": 10
+    },
+    {
       "id": "12499",
       "firstName": "Elic",
       "lastName": "Ayomanor",
       "position": "WR",
       "team": "TEN",
       "bye": 10
-    },
-    {
-      "id": "13274",
-      "firstName": "Germie",
-      "lastName": "Bernard",
-      "position": "WR",
-      "team": "PIT",
-      "bye": 5
     },
     {
       "id": "13346",
@@ -935,8 +935,8 @@
       "firstName": "Kayshon",
       "lastName": "Boutte",
       "position": "WR",
-      "team": "NE",
-      "bye": 14
+      "team": "HOU",
+      "bye": 6
     },
     {
       "id": "13320",
@@ -1017,6 +1017,14 @@
       "position": "WR",
       "team": "HOU",
       "bye": 6
+    },
+    {
+      "id": "2449",
+      "firstName": "Stefon",
+      "lastName": "Diggs",
+      "position": "WR",
+      "team": "WAS",
+      "bye": 12
     },
     {
       "id": "12540",
@@ -1105,14 +1113,6 @@
       "position": "WR",
       "team": "ARI",
       "bye": 8
-    },
-    {
-      "id": "12484",
-      "firstName": "Jayden",
-      "lastName": "Higgins",
-      "position": "WR",
-      "team": "HOU",
-      "bye": 6
     },
     {
       "id": "6801",
@@ -1243,14 +1243,6 @@
       "bye": 8
     },
     {
-      "id": "9494",
-      "firstName": "Marvin",
-      "lastName": "Mims",
-      "position": "WR",
-      "team": "DEN",
-      "bye": 12
-    },
-    {
       "id": "11625",
       "firstName": "Adonai",
       "lastName": "Mitchell",
@@ -1283,12 +1275,12 @@
       "bye": 8
     },
     {
-      "id": "12536",
-      "firstName": "Jaylin",
-      "lastName": "Noel",
+      "id": "8180",
+      "firstName": "Jalen",
+      "lastName": "Nailor",
       "position": "WR",
-      "team": "HOU",
-      "bye": 6
+      "team": "LV",
+      "bye": 8
     },
     {
       "id": "11620",
@@ -1305,14 +1297,6 @@
       "position": "WR",
       "team": "NO",
       "bye": 11
-    },
-    {
-      "id": "11638",
-      "firstName": "Ricky",
-      "lastName": "Pearsall",
-      "position": "WR",
-      "team": "SF",
-      "bye": 14
     },
     {
       "id": "8137",
@@ -1371,6 +1355,14 @@
       "bye": 10
     },
     {
+      "id": "5872",
+      "firstName": "Deebo",
+      "lastName": "Samuel",
+      "position": "WR",
+      "team": "SF",
+      "bye": 14
+    },
+    {
       "id": "8676",
       "firstName": "Rashid",
       "lastName": "Shaheed",
@@ -1411,6 +1403,14 @@
       "bye": 8
     },
     {
+      "id": "13417",
+      "firstName": "De'Zhaun",
+      "lastName": "Stribling",
+      "position": "WR",
+      "team": "SF",
+      "bye": 14
+    },
+    {
       "id": "5045",
       "firstName": "Courtland",
       "lastName": "Sutton",
@@ -1443,14 +1443,6 @@
       "bye": 8
     },
     {
-      "id": "10213",
-      "firstName": "Tre",
-      "lastName": "Tucker",
-      "position": "WR",
-      "team": "LV",
-      "bye": 8
-    },
-    {
       "id": "13281",
       "firstName": "Jordyn",
       "lastName": "Tyson",
@@ -1464,6 +1456,14 @@
       "lastName": "Waddle",
       "position": "WR",
       "team": "DEN",
+      "bye": 12
+    },
+    {
+      "id": "11610",
+      "firstName": "Malik",
+      "lastName": "Washington",
+      "position": "WR",
+      "team": "MIA",
       "bye": 12
     },
     {
@@ -1523,36 +1523,12 @@
       "bye": 10
     },
     {
-      "id": "11592",
-      "firstName": "Erick",
-      "lastName": "All",
-      "position": "TE",
-      "team": "CIN",
-      "bye": 10
-    },
-    {
-      "id": "10214",
-      "firstName": "Davis",
-      "lastName": "Allen",
-      "position": "TE",
-      "team": "LAR",
-      "bye": 8
-    },
-    {
       "id": "5012",
       "firstName": "Mark",
       "lastName": "Andrews",
       "position": "TE",
       "team": "BAL",
       "bye": 7
-    },
-    {
-      "id": "12521",
-      "firstName": "Elijah",
-      "lastName": "Arroyo",
-      "position": "TE",
-      "team": "SEA",
-      "bye": 8
     },
     {
       "id": "11603",
@@ -1571,12 +1547,12 @@
       "bye": 8
     },
     {
-      "id": "1706",
-      "firstName": "Jack",
-      "lastName": "Doyle",
+      "id": "8172",
+      "firstName": "Greg",
+      "lastName": "Dulcich",
       "position": "TE",
-      "team": "IND",
-      "bye": 11
+      "team": "MIA",
+      "bye": 12
     },
     {
       "id": "12506",
@@ -1601,6 +1577,14 @@
       "position": "TE",
       "team": "LAR",
       "bye": 8
+    },
+    {
+      "id": "7600",
+      "firstName": "Pat",
+      "lastName": "Freiermuth",
+      "position": "TE",
+      "team": "PIT",
+      "bye": 5
     },
     {
       "id": "12493",
@@ -1657,14 +1641,6 @@
       "position": "TE",
       "team": "NYG",
       "bye": 14
-    },
-    {
-      "id": "3239",
-      "firstName": "Bronson",
-      "lastName": "Kaufusi",
-      "position": "TE",
-      "team": "GB",
-      "bye": 5
     },
     {
       "id": "1466",
@@ -1755,6 +1731,14 @@
       "bye": 12
     },
     {
+      "id": "5973",
+      "firstName": "Josh",
+      "lastName": "Oliver",
+      "position": "TE",
+      "team": "MIN",
+      "bye": 6
+    },
+    {
       "id": "8111",
       "firstName": "Cade",
       "lastName": "Otton",
@@ -1811,6 +1795,14 @@
       "bye": 8
     },
     {
+      "id": "12154",
+      "firstName": "Messiah",
+      "lastName": "Swinson",
+      "position": "TE",
+      "team": "GB",
+      "bye": 5
+    },
+    {
       "id": "12498",
       "firstName": "Mason",
       "lastName": "Taylor",
@@ -1841,6 +1833,14 @@
       "position": "TE",
       "team": "IND",
       "bye": 11
+    },
+    {
+      "id": "8219",
+      "firstName": "Jelani",
+      "lastName": "Woods",
+      "position": "TE",
+      "team": "NYJ",
+      "bye": 9
     },
     {
       "id": "11533",
@@ -1881,14 +1881,6 @@
       "position": "K",
       "team": "PIT",
       "bye": 5
-    },
-    {
-      "id": "11145",
-      "firstName": "Tanner",
-      "lastName": "Brown",
-      "position": "K",
-      "team": "NO",
-      "bye": 11
     },
     {
       "id": "4227",
@@ -1947,30 +1939,6 @@
       "bye": 8
     },
     {
-      "id": "4233",
-      "firstName": "Zane",
-      "lastName": "Gonzalez",
-      "position": "K",
-      "team": "MIA",
-      "bye": 12
-    },
-    {
-      "id": "11058",
-      "firstName": "Blake",
-      "lastName": "Grupe",
-      "position": "K",
-      "team": "IND",
-      "bye": 11
-    },
-    {
-      "id": "8932",
-      "firstName": "Lucas",
-      "lastName": "Havrisik",
-      "position": "K",
-      "team": "GB",
-      "bye": 5
-    },
-    {
       "id": "7933",
       "firstName": "Alex",
       "lastName": "Kessman",
@@ -2027,14 +1995,6 @@
       "bye": 8
     },
     {
-      "id": "10937",
-      "firstName": "Jake",
-      "lastName": "Moody",
-      "position": "K",
-      "team": "WAS",
-      "bye": 12
-    },
-    {
       "id": "2747",
       "firstName": "Jason",
       "lastName": "Myers",
@@ -2059,14 +2019,6 @@
       "bye": 14
     },
     {
-      "id": "11092",
-      "firstName": "B.T.",
-      "lastName": "Potter",
-      "position": "K",
-      "team": "TB",
-      "bye": 9
-    },
-    {
       "id": "11792",
       "firstName": "Will",
       "lastName": "Reichard",
@@ -2083,20 +2035,68 @@
       "bye": 8
     },
     {
-      "id": "5119",
-      "firstName": "Jason",
-      "lastName": "Sanders",
-      "position": "K",
-      "team": "NYJ",
-      "bye": 9
-    },
-    {
       "id": "2020",
       "firstName": "Cairo",
       "lastName": "Santos",
       "position": "K",
       "team": "CHI",
       "bye": 5
+    },
+    {
+      "id": "13066",
+      "firstName": "Ben",
+      "lastName": "Sauls",
+      "position": "K",
+      "team": "NYG",
+      "bye": 14
+    },
+    {
+      "id": "12185",
+      "firstName": "Spencer",
+      "lastName": "Shrader",
+      "position": "K",
+      "team": "IND",
+      "bye": 11
+    },
+    {
+      "id": "6528",
+      "firstName": "Joey",
+      "lastName": "Slye",
+      "position": "K",
+      "team": "TEN",
+      "bye": 10
+    },
+    {
+      "id": "13545",
+      "firstName": "Trey",
+      "lastName": "Smack",
+      "position": "K",
+      "team": "GB",
+      "bye": 5
+    },
+    {
+      "id": "11653",
+      "firstName": "Charlie",
+      "lastName": "Smyth",
+      "position": "K",
+      "team": "NO",
+      "bye": 11
+    },
+    {
+      "id": "11261",
+      "firstName": "Andre",
+      "lastName": "Szmyt",
+      "position": "K",
+      "team": "CLE",
+      "bye": 9
+    },
+    {
+      "id": "13833",
+      "firstName": "Dominic",
+      "lastName": "Zvada",
+      "position": "K",
+      "team": "NYG",
+      "bye": 14
     },
     {
       "id": "SF",
@@ -2371,20 +2371,20 @@
       "bye": 6
     },
     {
-      "id": "5330",
-      "firstName": "Dorance",
-      "lastName": "Armstrong",
-      "position": "DL",
-      "team": "WAS",
-      "bye": 12
-    },
-    {
       "id": "13340",
       "firstName": "Rueben",
       "lastName": "Bain",
       "position": "DL",
       "team": "TB",
       "bye": 9
+    },
+    {
+      "id": "11760",
+      "firstName": "Austin",
+      "lastName": "Booker",
+      "position": "DL",
+      "team": "CHI",
+      "bye": 5
     },
     {
       "id": "5816",
@@ -2443,20 +2443,20 @@
       "bye": 8
     },
     {
-      "id": "13373",
-      "firstName": "Caden",
-      "lastName": "Curry",
-      "position": "DL",
-      "team": "IND",
-      "bye": 11
-    },
-    {
       "id": "10921",
       "firstName": "Yaya",
       "lastName": "Diaby",
       "position": "DL",
       "team": "TB",
       "bye": 9
+    },
+    {
+      "id": "12556",
+      "firstName": "Donovan",
+      "lastName": "Ezeiruaku",
+      "position": "DL",
+      "team": "DAL",
+      "bye": 10
     },
     {
       "id": "13395",
@@ -2483,6 +2483,14 @@
       "bye": 11
     },
     {
+      "id": "12571",
+      "firstName": "Mike",
+      "lastName": "Green",
+      "position": "DL",
+      "team": "BAL",
+      "bye": 7
+    },
+    {
       "id": "6900",
       "firstName": "Jonathan",
       "lastName": "Greenard",
@@ -2497,6 +2505,14 @@
       "position": "DL",
       "team": "BAL",
       "bye": 7
+    },
+    {
+      "id": "843",
+      "firstName": "Cameron",
+      "lastName": "Heyward",
+      "position": "DL",
+      "team": "PIT",
+      "bye": 5
     },
     {
       "id": "5840",
@@ -2515,6 +2531,14 @@
       "bye": 10
     },
     {
+      "id": "11703",
+      "firstName": "Jalyx",
+      "lastName": "Hunt",
+      "position": "DL",
+      "team": "PHI",
+      "bye": 9
+    },
+    {
       "id": "2393",
       "firstName": "Danielle",
       "lastName": "Hunter",
@@ -2523,28 +2547,12 @@
       "bye": 6
     },
     {
-      "id": "13362",
-      "firstName": "Lee",
-      "lastName": "Hunter",
-      "position": "DL",
-      "team": "CAR",
-      "bye": 14
-    },
-    {
       "id": "8289",
       "firstName": "Aidan",
       "lastName": "Hutchinson",
       "position": "DL",
       "team": "DET",
       "bye": 8
-    },
-    {
-      "id": "3558",
-      "firstName": "Chris",
-      "lastName": "Jones",
-      "position": "DL",
-      "team": "KC",
-      "bye": 10
     },
     {
       "id": "10879",
@@ -2587,20 +2595,12 @@
       "bye": 10
     },
     {
-      "id": "13358",
-      "firstName": "Anthony",
-      "lastName": "Lucas",
+      "id": "8343",
+      "firstName": "Boye",
+      "lastName": "Mafe",
       "position": "DL",
-      "team": "DET",
-      "bye": 8
-    },
-    {
-      "id": "6818",
-      "firstName": "Nnamdi",
-      "lastName": "Madubuike",
-      "position": "DL",
-      "team": "BAL",
-      "bye": 7
+      "team": "CIN",
+      "bye": 10
     },
     {
       "id": "13374",
@@ -2609,14 +2609,6 @@
       "position": "DL",
       "team": "HOU",
       "bye": 6
-    },
-    {
-      "id": "10883",
-      "firstName": "Will",
-      "lastName": "McDonald",
-      "position": "DL",
-      "team": "NYJ",
-      "bye": 9
     },
     {
       "id": "13341",
@@ -2635,12 +2627,20 @@
       "bye": 11
     },
     {
-      "id": "5841",
-      "firstName": "Ed",
-      "lastName": "Oliver",
+      "id": "11668",
+      "firstName": "Byron",
+      "lastName": "Murphy",
       "position": "DL",
-      "team": "BUF",
-      "bye": 7
+      "team": "SEA",
+      "bye": 8
+    },
+    {
+      "id": "12585",
+      "firstName": "James",
+      "lastName": "Pearce",
+      "position": "DL",
+      "team": "ATL",
+      "bye": 5
     },
     {
       "id": "11663",
@@ -2691,14 +2691,6 @@
       "bye": 14
     },
     {
-      "id": "13372",
-      "firstName": "R Mason",
-      "lastName": "Thomas",
-      "position": "DL",
-      "team": "KC",
-      "bye": 10
-    },
-    {
       "id": "10898",
       "firstName": "Tuli",
       "lastName": "Tuipulotu",
@@ -2731,11 +2723,11 @@
       "bye": 8
     },
     {
-      "id": "12602",
-      "firstName": "Mykel",
+      "id": "7696",
+      "firstName": "Milton",
       "lastName": "Williams",
       "position": "DL",
-      "team": "SF",
+      "team": "NE",
       "bye": 14
     },
     {
@@ -2753,6 +2745,14 @@
       "position": "DL",
       "team": "KC",
       "bye": 10
+    },
+    {
+      "id": "6782",
+      "firstName": "Chase",
+      "lastName": "Young",
+      "position": "DL",
+      "team": "NO",
+      "bye": 11
     },
     {
       "id": "6485",
@@ -2777,14 +2777,6 @@
       "position": "LB",
       "team": "NYJ",
       "bye": 9
-    },
-    {
-      "id": "6065",
-      "firstName": "Cody",
-      "lastName": "Barton",
-      "position": "LB",
-      "team": "TEN",
-      "bye": 10
     },
     {
       "id": "6815",
@@ -2827,12 +2819,12 @@
       "bye": 12
     },
     {
-      "id": "12640",
-      "firstName": "Teddye",
-      "lastName": "Buchanan",
+      "id": "5843",
+      "firstName": "Devin",
+      "lastName": "Bush",
       "position": "LB",
-      "team": "BAL",
-      "bye": 7
+      "team": "CHI",
+      "bye": 5
     },
     {
       "id": "10880",
@@ -2851,6 +2843,14 @@
       "bye": 9
     },
     {
+      "id": "12646",
+      "firstName": "Barrett",
+      "lastName": "Carter",
+      "position": "LB",
+      "team": "CIN",
+      "bye": 10
+    },
+    {
       "id": "6217",
       "firstName": "Blake",
       "lastName": "Cashman",
@@ -2867,12 +2867,12 @@
       "bye": 5
     },
     {
-      "id": "10980",
-      "firstName": "SirVocea",
-      "lastName": "Dennis",
+      "id": "8267",
+      "firstName": "Nakobe",
+      "lastName": "Dean",
       "position": "LB",
-      "team": "TB",
-      "bye": 9
+      "team": "LV",
+      "bye": 8
     },
     {
       "id": "6315",
@@ -2889,6 +2889,14 @@
       "position": "LB",
       "team": "NYG",
       "bye": 14
+    },
+    {
+      "id": "5960",
+      "firstName": "T.J.",
+      "lastName": "Edwards",
+      "position": "LB",
+      "team": "CHI",
+      "bye": 5
     },
     {
       "id": "6302",
@@ -2955,12 +2963,20 @@
       "bye": 8
     },
     {
-      "id": "5030",
-      "firstName": "Harold",
-      "lastName": "Landry",
+      "id": "12617",
+      "firstName": "Demetrius",
+      "lastName": "Knight",
       "position": "LB",
-      "team": "NE",
-      "bye": 14
+      "team": "CIN",
+      "bye": 10
+    },
+    {
+      "id": "8659",
+      "firstName": "Nate",
+      "lastName": "Landman",
+      "position": "LB",
+      "team": "LAR",
+      "bye": 8
     },
     {
       "id": "8329",
@@ -2971,12 +2987,12 @@
       "bye": 14
     },
     {
-      "id": "5580",
-      "firstName": "Frankie",
-      "lastName": "Luvu",
+      "id": "10947",
+      "firstName": "Ventrell",
+      "lastName": "Miller",
       "position": "LB",
-      "team": "WAS",
-      "bye": 12
+      "team": "JAX",
+      "bye": 8
     },
     {
       "id": "5332",
@@ -2987,28 +3003,12 @@
       "bye": 8
     },
     {
-      "id": "11086",
-      "firstName": "Ivan",
-      "lastName": "Pace",
-      "position": "LB",
-      "team": "MIN",
-      "bye": 6
-    },
-    {
       "id": "7640",
       "firstName": "Micah",
       "lastName": "Parsons",
       "position": "LB",
       "team": "GB",
       "bye": 5
-    },
-    {
-      "id": "7635",
-      "firstName": "Jaelan",
-      "lastName": "Phillips",
-      "position": "LB",
-      "team": "CAR",
-      "bye": 14
     },
     {
       "id": "6807",
@@ -3025,6 +3025,14 @@
       "position": "LB",
       "team": "NYG",
       "bye": 14
+    },
+    {
+      "id": "13453",
+      "firstName": "Jacob",
+      "lastName": "Rodriguez",
+      "position": "LB",
+      "team": "MIA",
+      "bye": 12
     },
     {
       "id": "12578",
@@ -3075,20 +3083,20 @@
       "bye": 12
     },
     {
-      "id": "10970",
-      "firstName": "Henry",
-      "lastName": "To'oTo'o",
-      "position": "LB",
-      "team": "HOU",
-      "bye": 6
-    },
-    {
       "id": "13379",
       "firstName": "Josiah",
       "lastName": "Trotter",
       "position": "LB",
       "team": "TB",
       "bye": 9
+    },
+    {
+      "id": "11667",
+      "firstName": "Dallas",
+      "lastName": "Turner",
+      "position": "LB",
+      "team": "MIN",
+      "bye": 6
     },
     {
       "id": "6183",
@@ -3104,14 +3112,6 @@
       "lastName": "Walker",
       "position": "LB",
       "team": "LV",
-      "bye": 8
-    },
-    {
-      "id": "8265",
-      "firstName": "Travon",
-      "lastName": "Walker",
-      "position": "LB",
-      "team": "JAX",
       "bye": 8
     },
     {
@@ -3131,20 +3131,20 @@
       "bye": 5
     },
     {
-      "id": "11727",
-      "firstName": "Payton",
-      "lastName": "Wilson",
+      "id": "6119",
+      "firstName": "Devin",
+      "lastName": "White",
       "position": "LB",
-      "team": "PIT",
-      "bye": 5
+      "team": "DET",
+      "bye": 8
     },
     {
-      "id": "11017",
-      "firstName": "Dee",
-      "lastName": "Winters",
+      "id": "6214",
+      "firstName": "Quincy",
+      "lastName": "Williams",
       "position": "LB",
-      "team": "DAL",
-      "bye": 10
+      "team": "CLE",
+      "bye": 9
     },
     {
       "id": "10917",
@@ -3153,30 +3153,6 @@
       "position": "LB",
       "team": "LAR",
       "bye": 8
-    },
-    {
-      "id": "13397",
-      "firstName": "Keith",
-      "lastName": "Abney",
-      "position": "DB",
-      "team": "DET",
-      "bye": 8
-    },
-    {
-      "id": "7669",
-      "firstName": "Paulson",
-      "lastName": "Adebo",
-      "position": "DB",
-      "team": "NYG",
-      "bye": 14
-    },
-    {
-      "id": "13393",
-      "firstName": "Brent",
-      "lastName": "Austin",
-      "position": "DB",
-      "team": "DEN",
-      "bye": 12
     },
     {
       "id": "4081",
@@ -3195,6 +3171,30 @@
       "bye": 5
     },
     {
+      "id": "10927",
+      "firstName": "Jordan",
+      "lastName": "Battle",
+      "position": "DB",
+      "team": "CIN",
+      "bye": 10
+    },
+    {
+      "id": "11682",
+      "firstName": "Cole",
+      "lastName": "Bishop",
+      "position": "DB",
+      "team": "BUF",
+      "bye": 7
+    },
+    {
+      "id": "8406",
+      "firstName": "Reed",
+      "lastName": "Blankenship",
+      "position": "DB",
+      "team": "HOU",
+      "bye": 6
+    },
+    {
       "id": "10905",
       "firstName": "Brian",
       "lastName": "Branch",
@@ -3211,20 +3211,20 @@
       "bye": 5
     },
     {
-      "id": "11686",
-      "firstName": "Javon",
-      "lastName": "Bullard",
-      "position": "DB",
-      "team": "GB",
-      "bye": 5
-    },
-    {
       "id": "3233",
       "firstName": "Kevin",
       "lastName": "Byard",
       "position": "DB",
       "team": "NE",
       "bye": 14
+    },
+    {
+      "id": "7715",
+      "firstName": "Cam",
+      "lastName": "Bynum",
+      "position": "DB",
+      "team": "IND",
+      "bye": 11
     },
     {
       "id": "7016",
@@ -3235,12 +3235,12 @@
       "bye": 8
     },
     {
-      "id": "13369",
-      "firstName": "Brandon",
-      "lastName": "Cisse",
+      "id": "10949",
+      "firstName": "Chamarri",
+      "lastName": "Conner",
       "position": "DB",
-      "team": "GB",
-      "bye": 5
+      "team": "KC",
+      "bye": 10
     },
     {
       "id": "8392",
@@ -3257,6 +3257,14 @@
       "position": "DB",
       "team": "LAR",
       "bye": 8
+    },
+    {
+      "id": "11678",
+      "firstName": "Cooper",
+      "lastName": "DeJean",
+      "position": "DB",
+      "team": "PHI",
+      "bye": 9
     },
     {
       "id": "13385",
@@ -3283,6 +3291,14 @@
       "bye": 10
     },
     {
+      "id": "5071",
+      "firstName": "DeShon",
+      "lastName": "Elliott",
+      "position": "DB",
+      "team": "PIT",
+      "bye": 5
+    },
+    {
       "id": "12597",
       "firstName": "Nick",
       "lastName": "Emmanwori",
@@ -3297,6 +3313,14 @@
       "position": "DB",
       "team": "NYJ",
       "bye": 9
+    },
+    {
+      "id": "10881",
+      "firstName": "Christian",
+      "lastName": "Gonzalez",
+      "position": "DB",
+      "team": "NE",
+      "bye": 14
     },
     {
       "id": "8339",
@@ -3315,22 +3339,6 @@
       "bye": 11
     },
     {
-      "id": "7666",
-      "firstName": "Jevon",
-      "lastName": "Holland",
-      "position": "DB",
-      "team": "NYG",
-      "bye": 14
-    },
-    {
-      "id": "13367",
-      "firstName": "Colton",
-      "lastName": "Hood",
-      "position": "DB",
-      "team": "NYG",
-      "bye": 14
-    },
-    {
       "id": "7811",
       "firstName": "Talanoa",
       "lastName": "Hufanga",
@@ -3347,35 +3355,11 @@
       "bye": 12
     },
     {
-      "id": "13370",
-      "firstName": "Chris",
-      "lastName": "Johnson",
-      "position": "DB",
-      "team": "MIA",
-      "bye": 12
-    },
-    {
       "id": "5341",
       "firstName": "Taron",
       "lastName": "Johnson",
       "position": "DB",
       "team": "LV",
-      "bye": 8
-    },
-    {
-      "id": "6911",
-      "firstName": "Brandon",
-      "lastName": "Jones",
-      "position": "DB",
-      "team": "DEN",
-      "bye": 12
-    },
-    {
-      "id": "8348",
-      "firstName": "Kerby",
-      "lastName": "Joseph",
-      "position": "DB",
-      "team": "DET",
       "bye": 8
     },
     {
@@ -3385,6 +3369,14 @@
       "position": "DB",
       "team": "LAR",
       "bye": 8
+    },
+    {
+      "id": "11685",
+      "firstName": "Kamari",
+      "lastName": "Lassiter",
+      "position": "DB",
+      "team": "HOU",
+      "bye": 6
     },
     {
       "id": "5876",
@@ -3400,6 +3392,14 @@
       "lastName": "McCoy",
       "position": "DB",
       "team": "LV",
+      "bye": 8
+    },
+    {
+      "id": "8364",
+      "firstName": "Trent",
+      "lastName": "McDuffie",
+      "position": "DB",
+      "team": "LAR",
       "bye": 8
     },
     {
@@ -3435,12 +3435,12 @@
       "bye": 14
     },
     {
-      "id": "13396",
-      "firstName": "Julian",
-      "lastName": "Neal",
+      "id": "11731",
+      "firstName": "Malik",
+      "lastName": "Mustapha",
       "position": "DB",
-      "team": "SEA",
-      "bye": 8
+      "team": "SF",
+      "bye": 14
     },
     {
       "id": "11674",
@@ -3459,36 +3459,12 @@
       "bye": 6
     },
     {
-      "id": "13386",
-      "firstName": "D'Angelo",
-      "lastName": "Ponds",
-      "position": "DB",
-      "team": "NYJ",
-      "bye": 9
-    },
-    {
       "id": "13406",
       "firstName": "Kamari",
       "lastName": "Ramsey",
       "position": "DB",
       "team": "HOU",
       "bye": 6
-    },
-    {
-      "id": "13382",
-      "firstName": "Keionte",
-      "lastName": "Scott",
-      "position": "DB",
-      "team": "TB",
-      "bye": 9
-    },
-    {
-      "id": "13399",
-      "firstName": "Genesis",
-      "lastName": "Smith",
-      "position": "DB",
-      "team": "LAC",
-      "bye": 12
     },
     {
       "id": "11705",
@@ -3507,12 +3483,28 @@
       "bye": 7
     },
     {
-      "id": "13398",
-      "firstName": "Treydan",
-      "lastName": "Stukes",
+      "id": "6923",
+      "firstName": "Geno",
+      "lastName": "Stone",
       "position": "DB",
-      "team": "LV",
-      "bye": 8
+      "team": "BUF",
+      "bye": 7
+    },
+    {
+      "id": "7641",
+      "firstName": "Pat",
+      "lastName": "Surtain",
+      "position": "DB",
+      "team": "DEN",
+      "bye": 12
+    },
+    {
+      "id": "8333",
+      "firstName": "Alontae",
+      "lastName": "Taylor",
+      "position": "DB",
+      "team": "TEN",
+      "bye": 10
     },
     {
       "id": "13389",
@@ -3531,12 +3523,12 @@
       "bye": 5
     },
     {
-      "id": "6711",
-      "firstName": "Jalen",
-      "lastName": "Thompson",
+      "id": "12591",
+      "firstName": "Xavier",
+      "lastName": "Watts",
       "position": "DB",
-      "team": "DAL",
-      "bye": 10
+      "team": "ATL",
+      "bye": 5
     },
     {
       "id": "6888",
@@ -3545,6 +3537,14 @@
       "position": "DB",
       "team": "TB",
       "bye": 9
+    },
+    {
+      "id": "12588",
+      "firstName": "Kevin",
+      "lastName": "Winston",
+      "position": "DB",
+      "team": "TEN",
+      "bye": 10
     },
     {
       "id": "10891",
