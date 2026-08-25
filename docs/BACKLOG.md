@@ -87,6 +87,23 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## In-person event delight
 
+- [ ] **Board goes true fullscreen — nothing on screen but the draft** `feature` — the board is the room's
+  centerpiece on a TV, but it still renders inside browser chrome (tabs, address bar, OS taskbar). It should
+  fill the entire display with no chrome at all. `BoardView` is already `h-screen w-screen`, so this is about
+  the shell around it, not the layout.
+  *Shape:* the Fullscreen API (`element.requestFullscreen()`), which **must** be triggered by a user gesture
+  — it cannot auto-fire on load, so the board needs an explicit control (a corner button that fades out, plus
+  a key like `F`) and should remember the preference for the next visit. Hide the cursor after a few idle
+  seconds. Esc exits by browser default; make re-entry obvious.
+  *Pairs with:* the **Screen Wake Lock API** — a board left untouched for a three-hour draft will otherwise
+  sleep or screensave mid-pick, which is the more embarrassing failure of the two. Re-acquire the lock on
+  visibility change, since the browser drops it on tab switch.
+  *Also consider:* `100dvh` over `100vh` so mobile browser bars don't clip the board, and a PWA manifest with
+  `display: "fullscreen"` as a second route in (ties to **PWA / installable shell** under Platform & reach).
+  True kiosk mode is a browser launch flag, not something the app can request — document it in
+  `RUNNING-A-DRAFT.md` as the host's option rather than building for it.
+  *Done when:* a board opened on a TV shows only the draft, stays awake untouched for a full draft, and comes
+  back to fullscreen cleanly after a reconnect.
 - [ ] **QR join codes** `feature` — render the admin's `?draft=` board/station links as QR codes so players
   scan to open their station on a phone (fits the "extra clients may connect" model).
 - [ ] **Audio + on-the-clock takeover** `feature` — chime on each pick, escalating tick as the timer runs
