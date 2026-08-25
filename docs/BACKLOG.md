@@ -32,9 +32,19 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Player pool
 
-- [ ] **Automate the pool refresh** `feature` — `publish:snapshot` still has to be run by hand. Schedule it
-  (EventBridge → Lambda, or CI on a cron) so the pool stays current through preseason without anyone
-  remembering. `DESIGN.md §6.2` already describes the scheduled-job form.
+- [ ] **Refresh the pool from inside the app, not from a shell** `feature` — `publish:snapshot` moved the
+  refresh off a code change, but it is still an operator running a CLI with AWS creds. Move it into the
+  running system: an admin-gated API route that calls the same `fetchAndBuildSnapshot` → writes
+  `pools/<date>.json` → repoints `pools/latest.json`, fronted by a **"Refresh player pool"** button in the
+  admin console. Same pipeline, invoked by the app instead of a person. Then put a schedule on top
+  (EventBridge → the same handler) so it stays current through preseason without anyone remembering;
+  `DESIGN.md §6.2` already describes that form.
+  *Constraints:* the build stays in `services/pool` so the rank-strip remains server-side (AD-6 — the pool
+  must never reach a client with ranking intact); the Lambda needs internet egress and `s3:PutObject` on the
+  pool bucket (Terraform grants only `GetObject` today); keep the never-overwrite-a-dated-object guard, since
+  clients cache pools by id; keep the CLI as the break-glass path.
+  *Done when:* an admin can refresh the pool from the console, a new draft picks it up, and no one has
+  touched a shell or a deploy.
 - [ ] **Surface the pool date in the admin** `feature` — the setup screen shows a player count but not *when*
   the snapshot was taken, so a stale pool looks identical to a fresh one. Show the resolved snapshot id and
   flag it when it is more than a week old.
