@@ -79,6 +79,35 @@ export async function fetchPoolCount(snapshotId: string): Promise<number> {
   return snapshot.players.length;
 }
 
+/**
+ * Read a snapshot id out of the `latest.json` pointer.
+ *
+ * Accepts either the pointer the publisher writes (`{ snapshotId }`) or a whole
+ * `PoolSnapshot` — the dev harness serves the bundled pool for every `/pool/*`
+ * path, so locally this resolves to the bundled snapshot's own id.
+ */
+export function readSnapshotId(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const id = (value as { snapshotId?: unknown }).snapshotId;
+  return typeof id === 'string' && id.trim() ? id.trim() : null;
+}
+
+/**
+ * Resolve the newest published snapshot id, so a fresh pool reaches new drafts
+ * without a code change or redeploy. Never cached — the pointer is the one
+ * mutable pool object. Returns `null` on any failure (not yet published, offline,
+ * SPA-fallback HTML) and the caller keeps whatever default it had.
+ */
+export async function fetchLatestSnapshotId(): Promise<string | null> {
+  try {
+    const res = await fetch(`${POOL_BASE}/latest.json`, { cache: 'no-store' });
+    if (!res.ok || !res.headers.get('content-type')?.includes('json')) return null;
+    return readSnapshotId(await res.json());
+  } catch {
+    return null;
+  }
+}
+
 /** Player lookup by id, for rendering rosters from the pick log. */
 export function indexPlayers(players: Player[]): Map<string, Player> {
   return new Map(players.map((p) => [p.id, p]));

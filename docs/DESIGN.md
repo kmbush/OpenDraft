@@ -400,6 +400,14 @@ schema change to the pick log is needed. MVP simply never populates it.
 pre-sorted). The draft references `poolSnapshotId`; clients fetch it once via CloudFront and cache in
 IndexedDB. Rationale: ~5 MB of mostly-static data has no business in the transactional hot path.
 
+**Dated pool objects are immutable; `pools/latest.json` is the one mutable pointer.** Because the client
+caches a pool in IndexedDB keyed by snapshot id, rewriting an id already in the wild would never reach the
+clients holding it — and would swap the pool underneath an in-flight draft. So a publish writes a new dated
+object (`Cache-Control: immutable`) and repoints a tiny `latest.json` pointer (`must-revalidate`) at it. The
+admin resolves that pointer when creating a draft and stamps the concrete dated id onto the draft, which is
+what pins an in-flight draft to one pool. Refreshing the pool is therefore a single command
+(`publish:snapshot`) with no code change and no redeploy.
+
 **Concurrency & ordering.** The Draft item carries a **`version`** that is a **monotonically increasing
 mutation counter** — bumped by **+1 on every state-mutating event, including admin `UNDO`/`EDIT_PICK`**. It is
 deliberately **not** "picks applied" (picks-applied is derivable from the pick log / pointer). **`version`
@@ -539,11 +547,14 @@ sequenceDiagram
     end
 ```
 
-### 6.2 Player-pool snapshot flow (once daily / on deploy)
+### 6.2 Player-pool snapshot flow (on demand, before a draft)
+
+Run by an operator today (`pnpm --filter @opendraft/pool publish:snapshot`); the scheduled-Lambda form below
+is the same flow automated, and is still open work.
 
 ```mermaid
 sequenceDiagram
-    participant J as Snapshot job (Lambda, scheduled)
+    participant J as Snapshot job (publish:snapshot CLI; Lambda later)
     participant SL as Sleeper /v1/players/nfl
     participant S3 as S3 pools/
     participant C as Client (station/board)
@@ -551,8 +562,10 @@ sequenceDiagram
     J->>SL: GET players/nfl  (<=1x per day)
     SL-->>J: {player_id: {...}}  (~6k players)
     J->>J: normalize + STRIP ranking fields + sort (pos, last, first)
-    J->>S3: put pools/<snapshotId>.json
+    J->>S3: put pools/<snapshotId>.json   (immutable)
+    J->>S3: put pools/latest.json  {snapshotId}   (must-revalidate)
     Note over J,S3: on fetch failure -> keep last good / bundled snapshot
+    C->>S3: GET pools/latest.json (admin, at draft creation)
     C->>S3: GET pool via CloudFront (once)
     C->>C: cache in IndexedDB (offline resilience)
 ```
@@ -736,10 +749,8 @@ possible warm tier (revisit AD-1).
   or local DynamoDB, so the actual transaction/condition semantics are unproven. *Mitigation:* before the
   first real draft, exercise `DynamoPersistence` against DynamoDB Local (or a scratch table) — especially the
   concurrent stale-version race and append/undo/edit deltas.
-- **R-8 Pool base-URL wiring (PRE-DEPLOY).** `apps/web` fetches the pool by path; the local harness serves it
-  at `/pool/<snapshotId>.json` (Vite proxy) while infra serves it via CloudFront at `/pools/<snapshotId>.json`
-  (plural). Reconcile before deploy — make the web app's pool base-URL configurable and point it at the
-  CloudFront `/pools/` path (or drive it off the `GET …/pool` route's returned URL).
+- **R-8 Pool base-URL wiring — RESOLVED.** `apps/web` reads `VITE_POOL_BASE` (unset → the harness `/pool`
+  proxy; deployed → CloudFront `/pools`), so the singular/plural split is configuration, not code.
 - **R-9 Admin setup-action race (low severity).** `SET_ORDER`/`START` (and other admin state transitions)
   carry no `expectedVersion`, and API Gateway+Lambda doesn't serialize per connection, so a *rapid
   programmatic* admin sequence could hit a spurious `REJECT` (the version-guarded commit prevents any actual
