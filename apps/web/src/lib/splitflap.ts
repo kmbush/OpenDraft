@@ -16,12 +16,6 @@ export const FLAP_MS = 55;
 /** How long a row spends settling, left to right, before it locks. */
 export const SETTLE_MS = 700;
 
-/** Cheap deterministic hash — decorrelates rows and columns so they don't clatter in step. */
-function seed(row: number, col: number): number {
-  const h = Math.imul((row * 73_856_093) ^ (col * 19_349_663), 0x45d9f3b);
-  return (h ^ (h >>> 15)) >>> 0;
-}
-
 /**
  * When the flap at `col` locks, given the row's lock time. Columns settle
  * left-to-right across `SETTLE_MS` so the last character lands exactly on the
@@ -33,20 +27,39 @@ export function flapLockAtMs(rowLockAtMs: number, col: number, cols: number): nu
 }
 
 /**
- * The glyph showing on one flap at `elapsed`. Locked flaps show their final
- * character; unlocked ones cycle deterministically.
+ * The glyph showing on one flap at `elapsed`.
+ *
+ * A real board's drum only turns one way and **arrives** at its letter — it never
+ * jumps there. So this counts backwards from the target: with `n` flaps left
+ * before lock, the drum shows the glyph `n` places before the answer. Rows stay
+ * decorrelated for free, because each column locks at its own moment on its own
+ * letter.
  */
 export function flapGlyph(
   finalChar: string,
   elapsed: number,
   rowLockAtMs: number,
-  row: number,
   col: number,
   cols: number,
 ): string {
-  if (elapsed >= flapLockAtMs(rowLockAtMs, col, cols)) return finalChar;
-  const step = Math.floor(elapsed / FLAP_MS);
-  return GLYPHS[(seed(row, col) + step) % GLYPHS.length] ?? ' ';
+  const lockAt = flapLockAtMs(rowLockAtMs, col, cols);
+  if (elapsed >= lockAt) return finalChar;
+  const stepsLeft = Math.ceil((lockAt - elapsed) / FLAP_MS);
+  const target = Math.max(0, GLYPHS.indexOf(finalChar));
+  const idx = (((target - stepsLeft) % GLYPHS.length) + GLYPHS.length) % GLYPHS.length;
+  return GLYPHS[idx] ?? ' ';
+}
+
+/**
+ * How far through its current flip a flap is, 0 → 1. Drives the card's squash so
+ * the motion is mechanical rather than a bare character swap; only meaningful
+ * while the flap is still turning.
+ */
+export function flapPhase(elapsed: number, rowLockAtMs: number, col: number, cols: number): number {
+  const lockAt = flapLockAtMs(rowLockAtMs, col, cols);
+  if (elapsed >= lockAt) return 1;
+  const intoStep = (lockAt - elapsed) % FLAP_MS;
+  return 1 - intoStep / FLAP_MS;
 }
 
 /** Uppercase, clipped to the board's fixed width, padded so every row is one length. */

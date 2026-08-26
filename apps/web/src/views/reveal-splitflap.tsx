@@ -11,36 +11,65 @@
 import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
 import { Plane } from 'lucide-react';
 import { Confetti } from '../components/confetti.js';
+import { useRafNow } from '../hooks/useRafNow.js';
 import { estimatedServerNow } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
-import { boardRow, boardWidth, flapGlyph, flapLockAtMs } from '../lib/splitflap.js';
+import { boardRow, boardWidth, flapGlyph, flapLockAtMs, flapPhase } from '../lib/splitflap.js';
 import { readableOn } from '../lib/teams.js';
 import { RevealCountdown, type RevealGameProps } from './reveal.js';
 
-/** One mechanical flap. */
+/**
+ * One mechanical flap.
+ *
+ * The split down the middle is the whole illusion, so the card is built as two
+ * halves with a real seam and different shading — a top face catching light, a
+ * bottom sitting in its own shadow. Mid-turn the card squashes vertically, which
+ * is what the eye reads as a flap falling rather than a character swapped.
+ */
 function Flap({
   char,
   locked,
+  phase,
   color,
   big,
 }: {
   char: string;
   locked: boolean;
+  /** 0 to 1 through the current flip; 1 once locked. */
+  phase: number;
   color?: string;
   big?: boolean;
 }) {
+  const face = locked && color ? color : undefined;
+  const ink = locked && color ? readableOn(color) : undefined;
+  // Squash into the turn, spring back out of it.
+  const squash = locked ? 1 : 0.82 + 0.18 * phase;
+  const glyph = char === ' ' ? '\u00A0' : char;
+
   return (
     <span
       className={cn(
-        'relative inline-flex items-center justify-center overflow-hidden rounded-[3px] border border-black/40 font-black tabular-nums leading-none transition-colors duration-150',
+        'relative inline-block overflow-hidden rounded-[3px] font-black tabular-nums leading-none',
         big ? 'h-[9vh] w-[6vh] text-[5vh]' : 'h-[4.6vh] w-[3.1vh] text-[2.6vh]',
-        locked ? 'text-black' : 'bg-neutral-900 text-white/80',
+        !locked && 'text-white/85',
       )}
-      style={locked && color ? { background: color, color: readableOn(color) } : undefined}
+      style={{
+        transform: `scaleY(${squash})`,
+        background: face ?? '#15161a',
+        color: ink,
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.6)',
+      }}
     >
-      {/* The hinge line down the middle is what sells it as a flap, not a tile. */}
-      <span className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-px bg-black/50" />
-      {char === ' ' ? ' ' : char}
+      <span className="absolute inset-x-0 top-0 flex h-1/2 items-end justify-center overflow-hidden">
+        <span className="translate-y-[52%]">{glyph}</span>
+      </span>
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/[0.07]" />
+      <span className="absolute inset-x-0 bottom-0 flex h-1/2 items-start justify-center overflow-hidden">
+        <span className="-translate-y-[48%]">{glyph}</span>
+      </span>
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-black/20" />
+      {/* The seam. */}
+      <span className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-[1.5px] -translate-y-1/2 bg-black/70" />
     </span>
   );
 }
@@ -83,7 +112,8 @@ function FlapRow({
             big={big}
             color={color}
             locked={elapsed >= flapLockAtMs(lockAt, col, cols)}
-            char={flapGlyph(ch, elapsed, lockAt, row, col, cols)}
+            phase={flapPhase(elapsed, lockAt, col, cols)}
+            char={flapGlyph(ch, elapsed, lockAt, col, cols)}
           />
         ))}
       </div>
@@ -98,11 +128,14 @@ export function SplitFlapReveal({
   teamName,
   colorOf,
 }: RevealGameProps) {
+  // The board's 250ms ticker is far too coarse for a drum turning every 55ms;
+  // sampled that slowly the cycling reads as noise rather than a machine.
+  const rafNow = useRafNow();
   const reveal = draft.reveal;
   if (!reveal) return null;
 
   const teams = draft.order.length;
-  const elapsed = estimatedServerNow(now, serverOffsetMs) - reveal.revealAt;
+  const elapsed = estimatedServerNow(rafNow || now, serverOffsetMs) - reveal.revealAt;
   if (elapsed < 0) return <RevealCountdown remaining={-elapsed} />;
 
   const names = draft.order.map((slot) => teamName(slot));

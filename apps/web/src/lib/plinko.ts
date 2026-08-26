@@ -66,32 +66,63 @@ export interface PuckPos {
   x: number;
   /** 0 at the top of the peg field, 1 at the slots. */
   y: number;
-  /** True on the frames just after a peg strike — drives the squash. */
+  /** True on the frames right after a peg strike — drives the squash. */
   striking: boolean;
+  /** Degrees. A real puck spins as it ricochets; direction follows the deflection. */
+  spin: number;
+  /** Peg row the puck is currently falling past, for lighting the struck peg. */
+  row: number;
+}
+
+/**
+ * Where the pegs sit on row `r`, as a fractional column offset.
+ *
+ * This is not decoration: a puck deflects half a column per row, so after `r`
+ * bounces its x always has the same fractional part. Line the peg grid up with
+ * that and every bounce lands on a peg; get it wrong by half a column and the
+ * puck visibly ricochets off empty space, which is what gives a plinko board
+ * away as a graphic.
+ */
+export function pegOffset(r: number, cols: number): number {
+  const centre = (cols - 1) / 2;
+  return (((centre - r / 2) % 1) + 1) % 1;
 }
 
 /**
  * Sample a puck mid-fall. `p` is 0..1 across the whole drop.
  *
- * Vertical speed accelerates like gravity; horizontal moves peg to peg, easing
- * so the puck hangs briefly at each strike instead of sliding.
+ * Gravity is applied to *time*, not to the vertical position: the puck advances
+ * through the peg rows faster and faster, while its height stays linear in row
+ * index. That is what keeps each deflection exactly on a peg — a quadratic height
+ * curve against an evenly spaced peg grid means the two only agree by accident.
+ *
+ * Between pegs it behaves like a little projectile: fast off the peg sideways,
+ * arcing slightly before gravity wins.
  */
 export function puckAt(path: number[], p: number): PuckPos {
   const clamped = Math.max(0, Math.min(1, p));
   const rows = path.length - 1;
-  const exact = clamped * rows;
-  const row = Math.min(rows - 1, Math.floor(exact));
-  const within = exact - row;
+
+  // Accelerate through the rows. `t` runs -1 → rows, so the puck enters at the
+  // top of the field and reaches peg row r exactly as t crosses r.
+  const t = clamped ** 1.6 * (rows + 1) - 1;
+  const row = Math.max(0, Math.min(rows - 1, Math.floor(t)));
+  const within = Math.max(0, Math.min(1, t - row));
 
   const from = path[row] ?? 0;
   const to = path[row + 1] ?? from;
-  // Ease-out within a row: quick off the peg, slowing into the next.
+  // Ease-out sideways: quick off the peg, slowing as the next one arrives.
   const eased = 1 - (1 - within) ** 2;
+
+  // The hop. Tiny — a puck that visibly levitates reads as a balloon.
+  const hop = Math.sin(within * Math.PI) * 0.018 * (1 - clamped * 0.6);
 
   return {
     x: from + (to - from) * eased,
-    // Quadratic fall — the puck visibly accelerates down the board.
-    y: clamped ** 1.6,
-    striking: within < 0.18,
+    y: Math.max(0, (t + 1) / (rows + 1) - hop),
+    striking: within < 0.14,
+    // Spin accumulates with the fall and leans into the deflection.
+    spin: (clamped * 900 + (to > from ? within : -within) * 120) % 360,
+    row,
   };
 }

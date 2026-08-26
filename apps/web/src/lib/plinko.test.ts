@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PEG_ROWS, plinkoPath, puckAt } from './plinko.js';
+import { PEG_ROWS, pegOffset, plinkoPath, puckAt } from './plinko.js';
 
 describe('plinkoPath', () => {
   it('always lands exactly on the target slot', () => {
@@ -72,5 +72,40 @@ describe('puckAt', () => {
   it('clamps outside 0..1 rather than flying off the board', () => {
     expect(puckAt(path, -3).y).toBe(0);
     expect(puckAt(path, 9).y).toBeCloseTo(1, 6);
+  });
+});
+
+describe('peg alignment', () => {
+  // The realism bug this guards: a puck deflects half a column per row, so its x
+  // always has a fixed fractional part per row. If the peg grid doesn't share it,
+  // the puck ricochets off empty space.
+  it('puts a peg exactly where the puck bounces, on every row', () => {
+    for (const cols of [8, 10, 11, 12]) {
+      const path = plinkoPath(4, 3, cols);
+      for (let r = 0; r < path.length - 1; r++) {
+        const frac = (((path[r] ?? 0) % 1) + 1) % 1;
+        expect(frac).toBeCloseTo(pegOffset(r, cols), 6);
+      }
+    }
+  });
+
+  it('reaches each peg row exactly as it deflects there', () => {
+    const cols = 12;
+    const path = plinkoPath(3, 7, cols);
+    const rows = path.length - 1;
+    for (let r = 0; r < rows; r++) {
+      // Invert the gravity curve to find when the puck crosses row r.
+      const p = ((r + 1) / (rows + 1)) ** (1 / 1.6);
+      const pos = puckAt(path, p);
+      expect(pos.y).toBeCloseTo((r + 1) / (rows + 1), 2);
+      expect(pos.x).toBeCloseTo(path[r] ?? 0, 2);
+    }
+  });
+
+  it('still enters at the top and finishes in the slot', () => {
+    const path = plinkoPath(5, 8, 12);
+    expect(puckAt(path, 0).y).toBe(0);
+    expect(puckAt(path, 1).y).toBeCloseTo(1, 6);
+    expect(puckAt(path, 1).x).toBeCloseTo(8, 6);
   });
 });
