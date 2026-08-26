@@ -14,6 +14,12 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Recently shipped
 
+- [x] **Player pool was frozen at commit time** `bug` — the pool shipped as a single hand-uploaded S3 object
+  (`pools/bundled.json`, built 2026-07-05) and every draft defaulted to `poolSnapshotId: 'bundled'`, so
+  refreshing it meant a code change. 61 of 444 players (14%) had gone stale — 6 rookies, plus veterans who
+  changed teams. Now `publish:snapshot` uploads a dated, immutable `pools/<date>.json` and repoints
+  `pools/latest.json`, which the admin resolves at draft creation. Refreshing is one command, no redeploy.
+
 - [x] **Countdown circle stutters on the draft board** `bug` — the ring rode the 250ms `useTicker`
   re-render with a 0.25s CSS transition papering over the gap; when the main thread was busy the interval
   drifted, transitions restarted mid-flight, and the sweep lurched. Now driven by `useCountdownSweep`, a rAF
@@ -23,6 +29,25 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 - [x] **Recent-picks count should scale with window size** `bug` — the rail was hard-coded to 8 picks. Now
   `useRowCapacity` measures the list box and its actual row height (ResizeObserver) and renders exactly the
   rows that fit. Verified: 8 rows @1366×768, 12 @1920×1080, 17 @2560×1440, with no row clipped at any size.
+
+## Player pool
+
+- [ ] **Refresh the pool from inside the app, not from a shell** `feature` — `publish:snapshot` moved the
+  refresh off a code change, but it is still an operator running a CLI with AWS creds. Move it into the
+  running system: an admin-gated API route that calls the same `fetchAndBuildSnapshot` → writes
+  `pools/<date>.json` → repoints `pools/latest.json`, fronted by a **"Refresh player pool"** button in the
+  admin console. Same pipeline, invoked by the app instead of a person. Then put a schedule on top
+  (EventBridge → the same handler) so it stays current through preseason without anyone remembering;
+  `DESIGN.md §6.2` already describes that form.
+  *Constraints:* the build stays in `services/pool` so the rank-strip remains server-side (AD-6 — the pool
+  must never reach a client with ranking intact); the Lambda needs internet egress and `s3:PutObject` on the
+  pool bucket (Terraform grants only `GetObject` today); keep the never-overwrite-a-dated-object guard, since
+  clients cache pools by id; keep the CLI as the break-glass path.
+  *Done when:* an admin can refresh the pool from the console, a new draft picks it up, and no one has
+  touched a shell or a deploy.
+- [ ] **Surface the pool date in the admin** `feature` — the setup screen shows a player count but not *when*
+  the snapshot was taken, so a stale pool looks identical to a fresh one. Show the resolved snapshot id and
+  flag it when it is more than a week old.
 
 ## Onboarding & connection UX
 

@@ -38,7 +38,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PositionBadge } from '../components/position-badge.js';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
@@ -55,7 +55,13 @@ import { Modal } from '../components/ui/modal.js';
 import { Select } from '../components/ui/select.js';
 import { Separator } from '../components/ui/separator.js';
 import { useLeague } from '../hooks/useLeague.js';
-import { fetchPoolCount, indexPlayers, playerName, usePool } from '../hooks/usePool.js';
+import {
+  fetchLatestSnapshotId,
+  fetchPoolCount,
+  indexPlayers,
+  playerName,
+  usePool,
+} from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
@@ -413,6 +419,8 @@ function Setup({ seed }: { seed: SetupSeed }) {
   const [poolSnapshotId, setPoolSnapshotId] = useState(seed.poolSnapshotId);
   const [poolCount, setPoolCount] = useState<number | null>(null);
   const [poolChecking, setPoolChecking] = useState(false);
+  // Once the admin edits the pool field, stop steering it from `latest.json`.
+  const poolPinned = useRef(false);
   const [accent, setAccent] = useState(seed.accent);
   const [logoUrl, setLogoUrl] = useState(seed.logoUrl);
   const [logoData, setLogoData] = useState(seed.logoData);
@@ -441,6 +449,19 @@ function Setup({ seed }: { seed: SetupSeed }) {
 
   const patchTeam = (i: number, patch: Partial<TeamConfig>) =>
     setTeamRows((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+
+  // Adopt the newest published pool, so refreshing it needs no code change. Runs
+  // once on mount; a failure (or an admin who has already typed an id) leaves the
+  // seed default alone.
+  useEffect(() => {
+    let active = true;
+    void fetchLatestSnapshotId().then((id) => {
+      if (active && id && !poolPinned.current) setPoolSnapshotId(id);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Verify the pool as the id changes, so the admin sees the player count.
   useEffect(() => {
@@ -557,8 +578,11 @@ function Setup({ seed }: { seed: SetupSeed }) {
           <Field label="Player pool">
             <Input
               value={poolSnapshotId}
-              onChange={(e) => setPoolSnapshotId(e.target.value)}
-              placeholder="e.g. bundled or 2026-07-03"
+              onChange={(e) => {
+                poolPinned.current = true;
+                setPoolSnapshotId(e.target.value);
+              }}
+              placeholder="e.g. 2026-08-25 or bundled"
             />
           </Field>
           {poolChecking ? (

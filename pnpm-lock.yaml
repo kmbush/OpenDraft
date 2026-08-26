@@ -118,6 +118,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.658.1
+        version: 3.1079.0
       '@types/node':
         specifier: 20.14.0
         version: 20.14.0

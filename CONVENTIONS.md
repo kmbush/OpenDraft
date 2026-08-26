@@ -63,7 +63,8 @@ services/pool ─▶ packages/shared
 | WS message types | UPPER_SNAKE string literals | `"SUBMIT_PICK"`, `"PICK_MADE"`, `"SYNC"` |
 | DynamoDB keys | prefixed uppercase | `LEAGUE#`, `DRAFT#`, `PICK#`, `CONN#` |
 | Terraform resources | snake_case | `aws_dynamodb_table.draft` |
-| S3 pool objects | `pools/<snapshotId>.json` | `pools/2026-07-03.json` |
+| S3 pool objects | `pools/<snapshotId>.json` (immutable) | `pools/2026-08-25.json` |
+| S3 pool pointer | `pools/latest.json` — `{ snapshotId }`, the only mutable pool object | |
 
 - IDs are opaque strings (ULID/UUID). Overall pick numbers are zero-padded in the SK (`PICK#0007`) so range
   queries sort correctly.

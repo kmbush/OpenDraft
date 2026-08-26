@@ -197,8 +197,21 @@ aws cloudfront create-invalidation \
 Load the app at `https://$(terraform output -raw cloudfront_domain_name)` (or your custom domain).
 
 The **player-pool snapshots** land in the pool bucket under `pools/` (POOL_PREFIX) and are served through
-the same CloudFront distribution at `/pools/*`. The `services/pool` job writes them; Terraform only creates
-the bucket.
+the same CloudFront distribution at `/pools/*`. Terraform only creates the bucket — publishing is a separate
+command, and it is **not** part of the web deploy:
+
+```bash
+POOL_BUCKET="$(terraform output -raw pool_bucket)" \
+  pnpm --filter @opendraft/pool publish:snapshot
+```
+
+That fetches Sleeper, builds a ranking-stripped snapshot, uploads `pools/<YYYY-MM-DD>.json`, and repoints
+`pools/latest.json` at it. New drafts adopt it automatically — no code change, no redeploy. Add `--dry-run`
+to rehearse, `--id <id>` to override the date.
+
+Dated objects are **immutable** (clients cache them in IndexedDB by id) so the publish refuses to overwrite
+one; publish a new id rather than passing `--force`. Run it **before** deploying a web bundle whose admin
+will resolve the new pointer.
 
 > SPA note: CloudFront maps S3 403/404 to `/index.html` (200) so client-side routes (`/station`, `/board`,
 > `/admin`, `/export`) survive a refresh. Tradeoff: a genuinely missing `pools/*` object also returns the
