@@ -97,7 +97,7 @@ const LINK_BUTTON =
 /** The reveal shows offered at draft time. Ids are checked against `RevealGame`. */
 const REVEAL_SHOWS: { id: RevealGame; label: string; blurb: string }[] = [
   { id: 'envelopes', label: 'Envelopes', blurb: 'Sealed cards flip open, worst pick first.' },
-  { id: 'split-flap', label: 'Split-Flap', blurb: 'A departure board clatters into the order.' },
+  { id: 'split-flap', label: 'Big Board', blurb: 'The draft-hall board clatters into the order.' },
   { id: 'plinko', label: 'Plinko', blurb: 'A puck per team bounces down into its slot.' },
 ];
 

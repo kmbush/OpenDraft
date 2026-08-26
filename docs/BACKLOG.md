@@ -106,6 +106,22 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 ## In-person event delight
 
+- [ ] **Make the celebration effects physical** `feature` — `confetti.tsx` drops uniform squares and circles
+  straight down a single CSS keyframe: same fall for every piece, no drift, no tumble, no depth. It reads as
+  falling shapes rather than confetti, and it's the payoff on every pick and every reveal finale, so it's the
+  most-seen animation in the app.
+  *What's missing, roughly by payoff:* **tumble** (each piece rotating on its own axes, so it catches the eye
+  edge-on then flat); **lateral drift and flutter** (paper doesn't fall vertically — a sine sway with
+  per-piece phase is most of the effect); **depth** (a near/far split driving size, blur and fall speed);
+  **varied shapes** (rectangular streamers and curled ribbons, not just squares); and **a real burst origin**
+  — cannons firing up and outward from the lower corners, rather than everything starting at the top edge.
+  *Constraint:* keep it derived from the piece index like the current one, so a reconnect or re-render never
+  reshuffles a burst mid-show. Prefer transform/opacity so it composites instead of repainting — this lands
+  next to the big-board performance item, and confetti during an announce beat is a suspect there.
+  *Also worth doing:* team-coloured bursts (the drafting team's colour, not the fixed six), and a bigger,
+  longer finale burst for the #1 reveal than for a routine pick.
+
+
 
 - [ ] **QR join codes** `feature` — render the admin's `?draft=` board/station links as QR codes so players
   scan to open their station on a phone (fits the "extra clients may connect" model).

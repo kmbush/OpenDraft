@@ -1,15 +1,17 @@
 /**
- * "Split-Flap" — the departure-board reveal.
+ * "The Big Board" — the draft-hall board, built as a split-flap.
  *
- * A whole wall of mechanical flaps clattering at once, rows locking bottom-up
- * (worst pick first) until one line is still tumbling alone: first overall.
+ * The mechanism is a departure board; the subject is not. This is the board on the
+ * wall of the draft hall: a whole rack of mechanical flaps clattering at once,
+ * rows locking bottom-up (worst pick first) until one line is still tumbling
+ * alone — first overall.
  *
  * Every glyph is a pure function of `(row, column, elapsed)` — see `lib/splitflap`
  * — so a board that reconnects mid-show renders the exact right frame rather than
  * restarting the clatter.
  */
 import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
-import { Plane } from 'lucide-react';
+import { ListOrdered } from 'lucide-react';
 import { Confetti } from '../components/confetti.js';
 import { useRafNow } from '../hooks/useRafNow.js';
 import { estimatedServerNow } from '../lib/clock.js';
@@ -148,9 +150,9 @@ export function SplitFlapReveal({
   return (
     <div className="relative flex flex-1 flex-col items-center gap-[2vh] overflow-hidden px-8 py-[3vh]">
       <div className="flex items-center gap-3">
-        <Plane className="h-6 w-6 text-amber-400" />
+        <ListOrdered className="h-6 w-6 text-amber-400" />
         <p className="font-black uppercase tracking-[0.35em] text-amber-400/90 md:text-2xl">
-          {outro ? 'The Order Is Set' : 'Departures'}
+          {outro ? 'The Order Is Set' : 'The Big Board'}
         </p>
       </div>
 
