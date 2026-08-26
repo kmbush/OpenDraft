@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PEG_ROWS, pegOffset, plinkoPath, puckAt } from './plinko.js';
+import { PEG_ROWS, pegOffset, plinkoPath, puckAt, slotColumns } from './plinko.js';
 
 describe('plinkoPath', () => {
   it('always lands exactly on the target slot', () => {
@@ -107,5 +107,34 @@ describe('peg alignment', () => {
     expect(puckAt(path, 0).y).toBe(0);
     expect(puckAt(path, 1).y).toBeCloseTo(1, 6);
     expect(puckAt(path, 1).x).toBeCloseTo(8, 6);
+  });
+});
+
+describe('slotColumns', () => {
+  it('is a permutation — every slot used exactly once', () => {
+    for (const teams of [8, 10, 12, 14]) {
+      const cols = slotColumns(1_770_000_000_000, teams);
+      expect([...cols].sort((a, b) => a - b)).toEqual(Array.from({ length: teams }, (_, i) => i));
+    }
+  });
+
+  it('does not fill left to right — that telegraphs the whole show', () => {
+    const cols = slotColumns(1_770_000_000_000, 12);
+    expect(cols).not.toEqual(Array.from({ length: 12 }, (_, i) => i));
+    expect(cols).not.toEqual(Array.from({ length: 12 }, (_, i) => 11 - i));
+  });
+
+  it('is deterministic, so every client and every reconnect agrees', () => {
+    expect(slotColumns(42, 10)).toEqual(slotColumns(42, 10));
+  });
+
+  it('gives a different arrangement per show', () => {
+    expect(slotColumns(42, 10)).not.toEqual(slotColumns(43, 10));
+  });
+
+  it('survives a zero seed rather than degenerating', () => {
+    expect([...slotColumns(0, 10)].sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 10 }, (_, i) => i),
+    );
   });
 });

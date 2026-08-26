@@ -75,6 +75,37 @@ export interface PuckPos {
 }
 
 /**
+ * Which slot each pick lands in, as a permutation of the columns.
+ *
+ * Filling the board strictly left to right telegraphs the whole show: once you
+ * see two pucks land side by side you know where every remaining one is going,
+ * including the finale. Scattering the slots means each drop is genuinely in
+ * question until it lands.
+ *
+ * Seeded rather than random, because every client must agree and a board that
+ * reconnects mid-show has to rebuild the same arrangement. `reveal.revealAt` is
+ * the natural seed: identical everywhere, and different for every show.
+ *
+ * Returns column-by-pick — index 0 is first overall.
+ */
+export function slotColumns(seed: number, teams: number): number[] {
+  const cols = Array.from({ length: teams }, (_, i) => i);
+  // A small LCG; quality doesn't matter here, agreement between clients does.
+  let state = seed >>> 0 || 1;
+  const next = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state;
+  };
+  for (let i = cols.length - 1; i > 0; i--) {
+    const j = next() % (i + 1);
+    const a = cols[i] as number;
+    cols[i] = cols[j] as number;
+    cols[j] = a;
+  }
+  return cols;
+}
+
+/**
  * Where the pegs sit on row `r`, as a fractional column offset.
  *
  * This is not decoration: a puck deflects half a column per row, so after `r`
