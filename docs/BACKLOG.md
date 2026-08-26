@@ -98,6 +98,20 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 ## In-person event delight
 
+- [ ] **More reveal mini-games** `feature` — the envelope flip is fine but it isn't exciting, and the reveal
+  is the one moment the whole room is watching the screen together. The plumbing is already there: add a
+  board component and one entry to `REVEAL_GAMES` in `apps/web/src/views/reveal.tsx` plus the `RevealGame`
+  union in `packages/shared/src/domain.ts` — **no engine change, no new state**, and the 30s countdown and
+  order-commit stay as they are.
+  *Candidates, roughly hardest-last:* a **split-flap board** clacking down to each name (cheap, very
+  broadcast); a **helmet race** across the screen where positions settle into draft order; **Plinko** with
+  a puck per team; **mystery helmets** turning over one at a time.
+  *Constraints:* stays blind — the order is committed server-side and unveiled only by the animation, and
+  no re-rolls. Reveals run last-pick-first and end on the #1 with confetti; keep that shape so the
+  crescendo doesn't move. Admin picks the game at reveal time (today it is implicit — only one exists).
+  *Done when:* the commissioner can choose from at least two more games and the room reacts.
+
+
 
 - [ ] **QR join codes** `feature` — render the admin's `?draft=` board/station links as QR codes so players
   scan to open their station on a phone (fits the "extra clients may connect" model).
@@ -111,6 +125,25 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
   reveal infra) and a preview of who's next.
 
 ## Platform & reach
+
+- [ ] **Performance pass on the big board** `bug` — the countdown ring still reads choppy on a big screen,
+  *after* the `useCountdownSweep` fix. That fix removed the React re-render from the sweep (rAF writing
+  `stroke-dashoffset` on a ref, measured 89% → 1% stalled frames under simulated contention), so the
+  remaining stutter is **not** re-renders and **not** a network call — the sweep makes neither. It needs
+  measuring on the actual TV rather than another assumption.
+  *Leading suspect:* animating `stroke-dashoffset` forces a **repaint of the ring's bounding box every
+  frame** — it is not GPU-composited like `transform`/`opacity`. On a 4K panel that is a large area, 60×
+  a second, on top of the board's gradients and vignette. Worth testing a transform-based ring (rotating a
+  half-circle mask) or isolating the ring on its own layer.
+  *Other things to rule out:* the 250ms `useTicker` re-rendering the whole board (a big DOM at 4K), the
+  radial-gradient background and backdrop blurs repainting with it, confetti during announce beats, and
+  whether the TV is actually driving 60Hz or the browser is throttling.
+  *Hard constraint:* the countdown must stay **deadline-derived** (AD-1) — remote players read the same
+  clock, and a fix that smooths the paint by drifting the time source would desync them and cost someone a
+  pick. Change how it is painted, never where the time comes from.
+  *Done when:* measured frame timings on the real display, before and after, with the deadline still the
+  single source of truth.
+
 
 - [ ] **PWA / installable shell** `feature` — the shared laptop opens instantly and survives wifi drops.
 - [ ] **Mobile-polished station** `feature` — a player drafting from their seat: big search, position
