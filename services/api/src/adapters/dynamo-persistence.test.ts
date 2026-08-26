@@ -4,17 +4,27 @@
  * edit, reassign) persist correctly, so correctness is proven regardless of the
  * integration env.
  *
- * The `DynamoPersistence` integration suite (R-7) runs the same ops against a
- * real DynamoDB and skips unless `DYNAMODB_LOCAL_ENDPOINT` is set. To run it:
+ * The `DynamoPersistence` integration suite (R-7) runs the same ops against a real
+ * DynamoDB. It skips unless one of two env vars is set, so the default `pnpm test`
+ * stays offline:
  *
+ *   # DynamoDB Local — dummy credentials, instant table creation
  *   docker run -p 8000:8000 amazon/dynamodb-local
  *   DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000 pnpm --filter @opendraft/api test
  *
- * Credentials are dummy (DynamoDB Local ignores them); the suite creates and
- * tears down its own table.
+ *   # Real DynamoDB — ambient credentials, a scratch table in your own account
+ *   DYNAMODB_TEST_REGION=us-west-2 pnpm --filter @opendraft/api test
+ *
+ * Either way the suite creates and tears down its own uniquely-named table and
+ * never touches a deployed one.
  */
 import { randomUUID } from 'node:crypto';
-import { CreateTableCommand, DeleteTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  CreateTableCommand,
+  DeleteTableCommand,
+  DynamoDBClient,
+  waitUntilTableExists,
+} from '@aws-sdk/client-dynamodb';
 import type { DraftState, Pick, Position } from '@opendraft/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { liveDraft } from '../test-helpers.js';
@@ -127,14 +137,20 @@ describe('diffPickItems', () => {
 // --- Integration: DynamoPersistence against real DynamoDB (R-7) -----------------
 
 const endpoint = process.env.DYNAMODB_LOCAL_ENDPOINT;
+const realRegion = process.env.DYNAMODB_TEST_REGION;
+const target = endpoint ? 'DynamoDB Local' : realRegion ? `real DynamoDB ${realRegion}` : null;
 
-describe.skipIf(!endpoint)('DynamoPersistence (DynamoDB Local)', () => {
+/** Creating a real table and waiting for ACTIVE is far slower than any test body. */
+const SETUP_TIMEOUT = 180_000;
+
+describe.skipIf(!target)(`DynamoPersistence (${target ?? 'skipped'}) — R-7`, () => {
   const tableName = `opendraft-test-${randomUUID()}`;
-  const client = new DynamoDBClient({
-    endpoint,
-    region: 'us-east-1',
-    credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
-  });
+  // Local ignores credentials; the real path uses ambient ones and puts a scratch
+  // table in the caller's own account.
+  const localCreds = { accessKeyId: 'local', secretAccessKey: 'local' };
+  const client = new DynamoDBClient(
+    endpoint ? { endpoint, region: 'us-east-1', credentials: localCreds } : { region: realRegion },
+  );
   const p = new DynamoPersistence(tableName, client);
 
   beforeAll(async () => {
@@ -152,12 +168,14 @@ describe.skipIf(!endpoint)('DynamoPersistence (DynamoDB Local)', () => {
         ],
       }),
     );
-  });
+    // Local is ACTIVE immediately; real DynamoDB is not, and every op would 400.
+    await waitUntilTableExists({ client, maxWaitTime: 120 }, { TableName: tableName });
+  }, SETUP_TIMEOUT);
 
   afterAll(async () => {
     await client.send(new DeleteTableCommand({ TableName: tableName }));
     client.destroy();
-  });
+  }, SETUP_TIMEOUT);
 
   /** Seed a fresh draft and append `count` picks one commit at a time. */
   async function build(count: number): Promise<DraftState> {
@@ -241,5 +259,30 @@ describe.skipIf(!endpoint)('DynamoPersistence (DynamoDB Local)', () => {
     const loaded = await p.loadDraft(LEAGUE, stale.draftId);
     expect(loaded?.picks.map((p) => p.overall)).toEqual([1, 2, 3]);
     expect(loaded?.picks[2]?.playerId).toBe('p3');
+  });
+
+  // R-7 names this case specifically: not a stale commit replayed after the fact,
+  // but writers racing from the same prev state at the same moment — the shape an
+  // admin UNDO landing on top of an in-flight pick actually takes.
+  it('serializes a genuinely concurrent race — exactly one writer wins', async () => {
+    const start = await build(2);
+    const contenders = ['a', 'b', 'c'].map((tag) => ({
+      ...start,
+      picks: [...start.picks, pick(3, { playerId: `racer-${tag}` })],
+      version: start.version + 1,
+    }));
+
+    const results = await Promise.all(contenders.map((next) => p.commit(LEAGUE, start, next)));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    const losers = results.filter((r) => !r.ok);
+    expect(losers).toHaveLength(2);
+    // Every loser must report the version that actually won, so the caller resyncs.
+    for (const l of losers) expect(l).toEqual({ ok: false, currentVersion: start.version + 1 });
+
+    // Exactly one pick 3 landed, and it belongs to the writer that won.
+    const loaded = await p.loadDraft(LEAGUE, start.draftId);
+    expect(loaded?.picks.map((x) => x.overall)).toEqual([1, 2, 3]);
+    expect(loaded?.version).toBe(start.version + 1);
+    expect(loaded?.picks[2]?.playerId).toMatch(/^racer-[abc]$/);
   });
 });

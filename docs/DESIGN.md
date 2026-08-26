@@ -744,11 +744,20 @@ possible warm tier (revisit AD-1).
 - **R-4 Clock skew across devices.** *Mitigation:* `serverNow` offset handshake in every `SYNC` (§5.5).
 - **R-5 Venue total-wifi-loss.** Flaky is handled; a *full* outage stalls the draft. *Mitigation
   (Phase 3+):* optional LAN-offline mode — flagged, not built (Open Q #8).
-- **R-7 Transactional commit not integration-tested (PRE-DEPLOY).** The DynamoDB `commit` (version-guarded
-  `TransactWriteCommand` + single PICK delta) is unit-tested against in-memory fakes but not against a real
-  or local DynamoDB, so the actual transaction/condition semantics are unproven. *Mitigation:* before the
-  first real draft, exercise `DynamoPersistence` against DynamoDB Local (or a scratch table) — especially the
-  concurrent stale-version race and append/undo/edit deltas.
+- **R-7 Transactional commit not integration-tested — RESOLVED (2026-08-26).** The version-guarded
+  `TransactWriteCommand` + PICK delta is now exercised against **real DynamoDB**, not just in-memory fakes.
+  `dynamo-persistence.test.ts` carries an integration suite covering append, undo-last, edit, reassign,
+  remove-middle, multi-pick rewind, the stale-version reject, and a **genuinely concurrent race** (three
+  writers committing from the same prev state at once — exactly one wins, both losers get the winning
+  `currentVersion` and neither leaks a pick). It skips by default so `pnpm test` stays offline, and runs
+  against either backend:
+
+  ```sh
+  DYNAMODB_TEST_REGION=us-west-2 pnpm --filter @opendraft/api test    # scratch table, ambient creds
+  DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000 pnpm --filter @opendraft/api test
+  ```
+
+  The suite creates and tears down its own uniquely-named table and never touches a deployed one.
 - **R-8 Pool base-URL wiring — RESOLVED.** `apps/web` reads `VITE_POOL_BASE` (unset → the harness `/pool`
   proxy; deployed → CloudFront `/pools`), so the singular/plural split is configuration, not code.
 - **R-9 Admin setup-action race (low severity).** `SET_ORDER`/`START` (and other admin state transitions)
