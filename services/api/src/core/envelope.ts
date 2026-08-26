@@ -5,6 +5,7 @@
  * admin-gated.
  */
 import type { DraftEvent, Position, Reject, RejectCode } from '@opendraft/shared';
+import { REVEAL_GAME_IDS, isRevealGame } from '@opendraft/shared';
 
 /**
  * Inbound envelope. Matches the shared outbound envelope shape plus an
@@ -86,8 +87,10 @@ export function mapEnvelopeToEvent(env: InboundEnvelope): MapResult {
     case 'ANNOUNCE_DONE':
       return { ok: true, admin: true, event: { type: env.type } };
     case 'START_REVEAL': {
-      if (p.game !== 'envelopes') return bad("START_REVEAL requires game:'envelopes'");
-      return { ok: true, admin: true, event: { type: 'START_REVEAL', game: 'envelopes' } };
+      if (!isRevealGame(p.game)) {
+        return bad(`START_REVEAL requires game: one of ${REVEAL_GAME_IDS.join(', ')}`);
+      }
+      return { ok: true, admin: true, event: { type: 'START_REVEAL', game: p.game } };
     }
     case 'EDIT_PICK': {
       if (!isNum(p.overall) || !isStr(p.playerId) || !isPosition(p.position)) {
