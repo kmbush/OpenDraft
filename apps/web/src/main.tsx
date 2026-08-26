@@ -11,12 +11,13 @@ import './index.css';
 import { connect } from './net.js';
 import { useLiveStore } from './store/store.js';
 
+/** Mirrors `currentRoute` in App.tsx — bare `/` is admin, station owns `/station`. */
 function roleForPath(): 'station' | 'board' | 'admin' {
   // /export is a read-only recap board — connect as a passive board viewer.
   if (location.pathname.startsWith('/board') || location.pathname.startsWith('/export'))
     return 'board';
-  if (location.pathname.startsWith('/admin')) return 'admin';
-  return 'station';
+  if (location.pathname.startsWith('/station')) return 'station';
+  return 'admin';
 }
 
 const draftId =

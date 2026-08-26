@@ -14,11 +14,13 @@
  */
 import { roundForOverall, slotForOverallPick } from '@opendraft/engine';
 import type { DraftState, Pick } from '@opendraft/shared';
-import { FileDown, Radio, Trophy, Wifi, WifiOff, Zap } from 'lucide-react';
+import { FileDown, Radio, Trophy, WifiOff, Zap } from 'lucide-react';
 import { type ReactNode, useMemo } from 'react';
 import { BrandMark } from '../components/brand-mark.js';
 import { Confetti } from '../components/confetti.js';
+import { ConnectionNotice } from '../components/connection-notice.js';
 import { PositionBadge } from '../components/position-badge.js';
+import { useConnectionPhase } from '../hooks/useConnectionPhase.js';
 import { useCountdownSweep } from '../hooks/useCountdownSweep.js';
 import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useRowCapacity } from '../hooks/useRowCapacity.js';
@@ -728,6 +730,7 @@ function CompleteView({
 
 export function BoardView() {
   const state = useLiveStore();
+  const connPhase = useConnectionPhase();
   const { draft, serverOffsetMs, connected } = state;
   const now = useTicker();
   const pool = usePool(draft?.poolSnapshotId);
@@ -752,10 +755,7 @@ export function BoardView() {
         style={rootStyle}
       >
         {vignette}
-        <div className="flex items-center gap-4 text-2xl text-white/50">
-          <Wifi className="h-7 w-7 animate-pulse" />
-          <span className="animate-pulse">Connecting to the draft…</span>
-        </div>
+        <ConnectionNotice phase={connPhase} tone="dark" />
       </div>
     );
   }

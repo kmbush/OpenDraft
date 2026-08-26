@@ -20,12 +20,19 @@ import { StationView } from './views/StationView.js';
 
 type Route = 'station' | 'board' | 'admin' | 'export';
 
+/**
+ * Bare `/` lands on **admin**, not station. A station with no draft id has nothing
+ * to render and used to hang on "Connecting…" forever, so the base URL — the thing
+ * people actually paste and bookmark — was a dead end. Admin is the one view that
+ * works from a cold start: it authenticates and can create or resume a draft.
+ * Station stays reachable at its own path and via the admin's `?draft=` links.
+ */
 function currentRoute(): Route {
   const path = location.pathname;
   if (path.startsWith('/board')) return 'board';
   if (path.startsWith('/export')) return 'export';
-  if (path.startsWith('/admin')) return 'admin';
-  return 'station';
+  if (path.startsWith('/station')) return 'station';
+  return 'admin';
 }
 
 export function App() {
