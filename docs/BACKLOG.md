@@ -14,6 +14,27 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Recently shipped
 
+- [x] **Board goes true fullscreen** `feature` — `F` or the header control puts the board on the whole
+  display with no browser chrome, cursor and control fading once the room settles. A **screen wake lock**
+  rides along, re-acquired on visibility change, so a board nobody touches doesn't screensave mid-draft.
+  Entering on load is impossible — `requestFullscreen()` requires a user gesture — so the board carries its
+  own control by necessity, not preference.
+
+- [x] **Bare `/` was a dead end** `feature` — the base URL fell through to the station, which with no draft
+  id hung on "Connecting…" forever. `/` now lands on the admin console, the one view that works from a cold
+  start. Station keeps `/station` and the admin's `?draft=` links.
+- [x] **State-aware loading** `feature` — one indefinite spinner covered every cause. Now `useConnectionPhase`
+  separates *no-draft* · *connecting* · *not-found* · *stalled* · *reconnecting*, each with its own guidance,
+  shared by board and station. The case worth naming: a **connected** socket that never delivers state is a
+  wrong `?draft=` id, not a network problem — the old copy sent people to check their wifi.
+- [x] **Pool date in the admin** `feature` — a stale pool and a fresh one both read "444 players". The setup
+  screen now shows the snapshot id and its age, and warns past a week.
+- [x] **R-7: transactional commit never integration-tested** `bug` — the version-guarded
+  `TransactWriteCommand` was only exercised against in-memory fakes. Its integration suite was gated on
+  `DYNAMODB_LOCAL_ENDPOINT` and had never run (no Docker/Java here), so 7 tests skipped silently on every
+  green build. Now runnable against real DynamoDB via `DYNAMODB_TEST_REGION`, plus a genuinely concurrent
+  race. Verified 8/8 against us-west-2.
+
 - [x] **Player pool was frozen at commit time** `bug` — the pool shipped as a single hand-uploaded S3 object
   (`pools/bundled.json`, built 2026-07-05) and every draft defaulted to `poolSnapshotId: 'bundled'`, so
   refreshing it meant a code change. 61 of 444 players (14%) had gone stale — 6 rookies, plus veterans who
@@ -45,26 +66,16 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
   clients cache pools by id; keep the CLI as the break-glass path.
   *Done when:* an admin can refresh the pool from the console, a new draft picks it up, and no one has
   touched a shell or a deploy.
-- [ ] **Surface the pool date in the admin** `feature` — the setup screen shows a player count but not *when*
-  the snapshot was taken, so a stale pool looks identical to a fresh one. Show the resolved snapshot id and
-  flag it when it is more than a week old.
 
 ## Onboarding & connection UX
 
-*(Surfaced by the "Connecting to the draft…" hang — the app assumes you already know your way in.)*
+*(Surfaced by the "Connecting to the draft…" hang. The entry dead end and the blind spinner are fixed —
+what remains is making a cold start resume on its own, without a `?draft=` link to carry the id.)*
 
-- [ ] **Default URL → admin console (with auth)** `feature` — hitting the base URL (whatever the installer's
-  domain — e.g. `draft.example.com`, or the default `*.cloudfront.net`) should land on the **admin
-  console and prompt authentication by default**, instead of the station view. Bare `/` currently falls
-  through to station and hangs when no draft id is known. This is a client-route default change served
-  through CloudFront (the SPA `default_root_object` stays `index.html`) — it tracks whatever domain the
-  installer already configured, so no extra per-deploy config. Board/station stay reachable at their
-  explicit paths and shared `?draft=` links.
-- [ ] **Public role picker / entry (secondary to the above)** `feature` — for non-admin arrivals, offer a
-  lightweight way to reach Board · Station · Resume (e.g. a picker or per-role links) rather than a dead end.
-  Pairs with "Default URL → admin console": admins land in the hub; viewers get routed to board/station.
-- [ ] **State-aware loading** `feature` — replace the infinite "Connecting…" with distinct states:
-  *connecting* (with a timeout → guidance), *connected-but-no-draft*, *reconnecting*, *error*.
+- [ ] **Public role picker / entry** `feature` — for non-admin arrivals, offer a lightweight way to reach
+  Board · Station · Resume rather than dropping everyone on the admin sign-in. Admins land in the hub;
+  viewers get routed to board/station.
+
 - [ ] **Active-draft pointer on the league doc** `feature` — persist the current draft id server-side so any
   device/origin auto-resumes without the `?draft=` / `localStorage` handoff. (localStorage is per-origin —
   this is why a new domain/device starts blank.)
@@ -87,23 +98,7 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## In-person event delight
 
-- [ ] **Board goes true fullscreen — nothing on screen but the draft** `feature` — the board is the room's
-  centerpiece on a TV, but it still renders inside browser chrome (tabs, address bar, OS taskbar). It should
-  fill the entire display with no chrome at all. `BoardView` is already `h-screen w-screen`, so this is about
-  the shell around it, not the layout.
-  *Shape:* the Fullscreen API (`element.requestFullscreen()`), which **must** be triggered by a user gesture
-  — it cannot auto-fire on load, so the board needs an explicit control (a corner button that fades out, plus
-  a key like `F`) and should remember the preference for the next visit. Hide the cursor after a few idle
-  seconds. Esc exits by browser default; make re-entry obvious.
-  *Pairs with:* the **Screen Wake Lock API** — a board left untouched for a three-hour draft will otherwise
-  sleep or screensave mid-pick, which is the more embarrassing failure of the two. Re-acquire the lock on
-  visibility change, since the browser drops it on tab switch.
-  *Also consider:* `100dvh` over `100vh` so mobile browser bars don't clip the board, and a PWA manifest with
-  `display: "fullscreen"` as a second route in (ties to **PWA / installable shell** under Platform & reach).
-  True kiosk mode is a browser launch flag, not something the app can request — document it in
-  `RUNNING-A-DRAFT.md` as the host's option rather than building for it.
-  *Done when:* a board opened on a TV shows only the draft, stays awake untouched for a full draft, and comes
-  back to fullscreen cleanly after a reconnect.
+
 - [ ] **QR join codes** `feature` — render the admin's `?draft=` board/station links as QR codes so players
   scan to open their station on a phone (fits the "extra clients may connect" model).
 - [ ] **Audio + on-the-clock takeover** `feature` — chime on each pick, escalating tick as the timer runs

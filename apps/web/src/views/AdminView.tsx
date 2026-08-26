@@ -14,6 +14,7 @@ import {
   type Position,
 } from '@opendraft/shared';
 import {
+  AlertCircle,
   CheckCircle2,
   Clapperboard,
   Clock,
@@ -65,6 +66,7 @@ import {
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
+import { poolAge } from '../lib/poolAge.js';
 import { POSITION_COLOR } from '../lib/positions.js';
 import { ROSTER_PRESETS, type RosterSpec, buildRosterFormat } from '../lib/roster.js';
 import {
@@ -520,6 +522,9 @@ function Setup({ seed }: { seed: SetupSeed }) {
   }
 
   const hasPool = poolCount !== null && poolCount > 0;
+  // A count alone can't distinguish a fresh pool from a stale one — both read "444
+  // players". The snapshot id is a build date, so it carries the age.
+  const age = useMemo(() => poolAge(poolSnapshotId), [poolSnapshotId]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -590,16 +595,39 @@ function Setup({ seed }: { seed: SetupSeed }) {
               <Loader2 className="h-4 w-4 animate-spin" /> Checking pool…
             </p>
           ) : hasPool ? (
-            <p className="flex items-center gap-2 text-sm text-emerald-600">
-              <CheckCircle2 className="h-4 w-4" /> Pool: {poolCount} players loaded
-            </p>
+            <div className="space-y-1.5">
+              <p className="flex items-center gap-2 text-sm text-emerald-600">
+                <CheckCircle2 className="h-4 w-4" /> Pool: {poolCount} players loaded
+                {age && (
+                  <span className="text-muted-foreground">
+                    · {poolSnapshotId.trim()} ({age.label})
+                  </span>
+                )}
+              </p>
+              {age?.stale && (
+                <Alert variant="warning">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <div>
+                    <AlertTitle>This pool is {age.days} days old</AlertTitle>
+                    <AlertDescription>
+                      Rosters move through preseason, so rookies and traded players may be missing
+                      or on the wrong team. Publish a fresh one — see infra/README.md §5 — then
+                      reload this page to pick it up.
+                    </AlertDescription>
+                  </div>
+                </Alert>
+              )}
+            </div>
           ) : (
             <Alert variant="warning">
-              <AlertTitle>No pool loaded</AlertTitle>
-              <AlertDescription>
-                Stations will have no players to draft. Enter a valid pool id (try{' '}
-                <code>bundled</code>).
-              </AlertDescription>
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <div>
+                <AlertTitle>No pool loaded</AlertTitle>
+                <AlertDescription>
+                  Stations will have no players to draft. Enter a valid pool id (try{' '}
+                  <code>bundled</code>).
+                </AlertDescription>
+              </div>
             </Alert>
           )}
 

@@ -14,12 +14,15 @@
  */
 import { roundForOverall, slotForOverallPick } from '@opendraft/engine';
 import type { DraftState, Pick } from '@opendraft/shared';
-import { FileDown, Radio, Trophy, Wifi, WifiOff, Zap } from 'lucide-react';
-import { type ReactNode, useMemo } from 'react';
+import { FileDown, Maximize, Minimize, Radio, Trophy, WifiOff, Zap } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { BrandMark } from '../components/brand-mark.js';
 import { Confetti } from '../components/confetti.js';
+import { ConnectionNotice } from '../components/connection-notice.js';
 import { PositionBadge } from '../components/position-badge.js';
+import { useConnectionPhase } from '../hooks/useConnectionPhase.js';
 import { useCountdownSweep } from '../hooks/useCountdownSweep.js';
+import { type Fullscreen, useFullscreen, useIdle } from '../hooks/useFullscreen.js';
 import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useRowCapacity } from '../hooks/useRowCapacity.js';
 import { useTicker } from '../hooks/useTicker.js';
@@ -165,6 +168,32 @@ function CountdownRing({
 
 // --- Top strip -------------------------------------------------------------
 
+/**
+ * The board's own way into fullscreen. It has to exist: `requestFullscreen()`
+ * needs a user gesture, so the board cannot go fullscreen on load however much
+ * we'd like it to. Fades out with the cursor once the room settles, and stays
+ * focusable so it can be tabbed back to.
+ */
+function FullscreenButton({ fs, hidden }: { fs: Fullscreen; hidden: boolean }) {
+  if (!fs.supported) return null;
+  const Icon = fs.active ? Minimize : Maximize;
+  return (
+    <button
+      type="button"
+      onClick={fs.toggle}
+      title={fs.active ? 'Exit fullscreen (F or Esc)' : 'Fullscreen (F)'}
+      aria-label={fs.active ? 'Exit fullscreen' : 'Enter fullscreen'}
+      className={cn(
+        'rounded-lg border border-white/10 bg-white/5 p-2 text-white/50 transition-opacity duration-500',
+        'hover:bg-white/15 hover:text-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
+        hidden ? 'opacity-0' : 'opacity-100',
+      )}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
 function TopStrip({
   round,
   rounds,
@@ -172,6 +201,8 @@ function TopStrip({
   totalPicks,
   status,
   connected,
+  fs,
+  controlHidden,
 }: {
   round: number;
   rounds: number;
@@ -179,6 +210,9 @@ function TopStrip({
   totalPicks: number;
   status: string;
   connected: boolean;
+  fs: Fullscreen;
+  /** Fades the control once the room settles, without moving anything else. */
+  controlHidden: boolean;
 }) {
   return (
     <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-10 py-5">
@@ -215,6 +249,7 @@ function TopStrip({
             <WifiOff className="h-4 w-4" /> Offline
           </span>
         )}
+        <FullscreenButton fs={fs} hidden={controlHidden} />
       </div>
     </header>
   );
@@ -728,6 +763,24 @@ function CompleteView({
 
 export function BoardView() {
   const state = useLiveStore();
+  const connPhase = useConnectionPhase();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fs = useFullscreen(useCallback(() => rootRef.current, []));
+  const idle = useIdle();
+
+  // `F` toggles fullscreen. The board has no text inputs, so a bare letter is safe,
+  // and it gives a host with a remote or a stray keyboard a way in without aiming
+  // at a fading button. Esc still exits by browser default.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      fs.toggle();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fs]);
   const { draft, serverOffsetMs, connected } = state;
   const now = useTicker();
   const pool = usePool(draft?.poolSnapshotId);
@@ -752,10 +805,7 @@ export function BoardView() {
         style={rootStyle}
       >
         {vignette}
-        <div className="flex items-center gap-4 text-2xl text-white/50">
-          <Wifi className="h-7 w-7 animate-pulse" />
-          <span className="animate-pulse">Connecting to the draft…</span>
-        </div>
+        <ConnectionNotice phase={connPhase} tone="dark" />
       </div>
     );
   }
@@ -828,7 +878,12 @@ export function BoardView() {
 
   return (
     <div
-      className="relative flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-white"
+      ref={rootRef}
+      className={cn(
+        'relative flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-white',
+        // A settled board shows only the draft — no pointer parked over it.
+        fs.active && idle && 'cursor-none',
+      )}
       style={rootStyle}
     >
       {vignette}
@@ -839,6 +894,8 @@ export function BoardView() {
         totalPicks={totalPicks}
         status={draft.status}
         connected={connected}
+        fs={fs}
+        controlHidden={fs.active && idle}
       />
 
       {phase === 'pre' ? (

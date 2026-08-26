@@ -16,6 +16,7 @@ import type { Pick, Player, Position } from '@opendraft/shared';
 import { AlertCircle, Clock, Loader2, Lock, Pause, Search, Trophy, X, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppHeader } from '../components/app-header.js';
+import { ConnectionNotice } from '../components/connection-notice.js';
 import { PositionBadge } from '../components/position-badge.js';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
@@ -23,6 +24,7 @@ import { Button } from '../components/ui/button.js';
 import { Card, CardContent } from '../components/ui/card.js';
 import { Input } from '../components/ui/input.js';
 import { Modal } from '../components/ui/modal.js';
+import { useConnectionPhase } from '../hooks/useConnectionPhase.js';
 import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useTicker } from '../hooks/useTicker.js';
 import { formatClock, remainingMs } from '../lib/clock.js';
@@ -543,6 +545,7 @@ function DraftConfirmDialog({
 
 export function StationView() {
   const state = useLiveStore();
+  const phase = useConnectionPhase();
   const { draft, serverOffsetMs, optimistic } = state;
   const pool = usePool(draft?.poolSnapshotId);
   const now = useTicker();
@@ -602,10 +605,8 @@ export function StationView() {
   if (!draft) {
     return (
       <Frame>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" /> Connecting to the draft…
-          </div>
+        <div className="flex min-h-[60vh] items-center justify-center px-4">
+          <ConnectionNotice phase={phase} />
         </div>
       </Frame>
     );
