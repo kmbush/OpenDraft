@@ -190,7 +190,7 @@ export function SplitFlapReveal({
       <p className="text-center text-sm uppercase tracking-[0.3em] text-white/40">
         {locked} of {teams} locked
       </p>
-      {finaleOpen && <Confetti count={140} />}
+      {finaleOpen && <Confetti count={180} colors={[colorOf(draft.order[0] ?? 0), '#f8fafc']} />}
     </div>
   );
 }

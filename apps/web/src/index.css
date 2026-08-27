@@ -41,7 +41,8 @@
   --animate-takeover: takeover 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-reveal: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-shimmer: shimmer 2.4s linear infinite;
-  --animate-confetti: confetti-fall 2.8s cubic-bezier(0.3, 0.6, 0.7, 1) forwards;
+  /* Confetti travel eases like a thrown object: fast out, slowing at the apex. */
+  --animate-confetti-travel: confetti-travel cubic-bezier(0.16, 0.62, 0.44, 1) forwards;
   --animate-clock-pulse: clock-pulse 0.9s ease-in-out infinite;
   --animate-slide-in: slide-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   --animate-breathe: breathe 3.5s ease-in-out infinite;
@@ -129,14 +130,65 @@
 }
 
 /* Confetti fall — one piece; callers randomize offsets via inline style. */
-@keyframes confetti-fall {
+/*
+ * Confetti is built from three nested transforms rather than one, because the
+ * three motions have different periods: a piece travels once, flutters several
+ * times on the way, and tumbles at its own rate on each axis. Folding them into
+ * a single keyframe forces them to share a duration, which is what made the old
+ * burst read as one rigid object per piece.
+ *
+ * Every layer animates transform/opacity only, so the whole burst composites
+ * instead of repainting.
+ */
+@keyframes confetti-travel {
   0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0);
+  }
+  6% {
     opacity: 1;
-    transform: translateY(-10vh) rotate(0deg);
+  }
+  /* The apex: the cannon's arc peaks here, then gravity takes over. */
+  38% {
+    transform: translate3d(var(--apex-x), var(--apex-y), 0);
+  }
+  85% {
+    opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateY(105vh) rotate(720deg);
+    transform: translate3d(var(--dx), var(--dy), 0);
+  }
+}
+
+/* Paper doesn't fall plumb. This is most of what sells it. */
+@keyframes confetti-flutter {
+  from {
+    transform: translateX(calc(var(--sway) * -1));
+  }
+  to {
+    transform: translateX(var(--sway));
+  }
+}
+
+/*
+ * The tumble. Unequal periods per axis mean the piece regularly turns edge-on
+ * and momentarily vanishes — the thing a flat 2D rotate can never do, and the
+ * single biggest reason the old burst looked like spinning stickers.
+ */
+@keyframes confetti-spin-x {
+  to {
+    transform: rotateX(360deg);
+  }
+}
+@keyframes confetti-spin-y {
+  to {
+    transform: rotateY(360deg);
+  }
+}
+@keyframes confetti-spin-z {
+  to {
+    transform: rotateZ(360deg);
   }
 }
 

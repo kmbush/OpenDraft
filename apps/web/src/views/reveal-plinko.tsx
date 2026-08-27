@@ -242,7 +242,9 @@ export function PlinkoReveal({ draft, now, serverOffsetMs, teamName, colorOf }: 
       <p className="text-center text-sm uppercase tracking-[0.3em] text-white/40">
         {landed.length} of {teams} dropped
       </p>
-      {elapsed >= finaleAt && <Confetti count={140} />}
+      {elapsed >= finaleAt && (
+        <Confetti count={180} colors={[colorOf(draft.order[0] ?? 0), '#f8fafc']} />
+      )}
     </div>
   );
 }
