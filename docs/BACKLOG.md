@@ -16,7 +16,8 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 - [x] **The board has sound** `feature` — a registry of named board moments (pick made, on the clock, timer
   warning, per-second tick, auto-pick, draft complete, reveal beat, reveal finale) mapped to sounds by
-  swappable **packs**: *Broadcast*, *Arcade*, *Stadium*. `SoundPack` is a total record over the event list, so
+  swappable **packs**: *Gameday* (broadcast brass + ref whistle), *Arena* (organ, air horns, crowd) and
+  *Sideline* (drumline). `SoundPack` is a total record over the event list, so
   a pack that forgets a cue is a compile error rather than a silence nobody notices on draft night.
   Sounds are **synthesised** with Web Audio — no audio files in the repo, no sample licensing, and a pack is
   plain data, so theming the room is a config change.

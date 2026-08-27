@@ -22,10 +22,18 @@ export interface Layer {
   /** Peak level, 0..1, before the master gain. */
   gain: number;
   attackMs: number;
+  /** Time held at full level before the decay. A horn sustains; a bell doesn't. */
+  holdMs?: number;
   decayMs: number;
   /** Offset within the sound — this is how a chord or an arpeggio is built. */
   delayMs?: number;
   filter?: { type: BiquadFilterType; freq: number; q?: number };
+  /**
+   * Pitch wobble. This is what separates a referee's whistle from a sine beep —
+   * the pea rattling inside is a fast, deep warble, and without it a whistle just
+   * sounds like a tone.
+   */
+  vibrato?: { rateHz: number; depthCents: number };
 }
 
 export interface Sound {
@@ -35,7 +43,7 @@ export interface Sound {
 /** Total wall time a sound occupies, for scheduling and for tests. */
 export function soundDurationMs(sound: Sound): number {
   return sound.layers.reduce(
-    (max, l) => Math.max(max, (l.delayMs ?? 0) + l.attackMs + l.decayMs),
+    (max, l) => Math.max(max, (l.delayMs ?? 0) + l.attackMs + (l.holdMs ?? 0) + l.decayMs),
     0,
   );
 }
@@ -80,12 +88,16 @@ export function playSound(
     const decay = Math.max(0.001, layer.decayMs / 1000);
     const peak = Math.max(0.0001, layer.gain * velocity);
 
+    const hold = Math.max(0, (layer.holdMs ?? 0) / 1000);
+    const decayStart = start + attack + hold;
+
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.0001, start);
     env.gain.exponentialRampToValueAtTime(peak, start + attack);
+    if (hold > 0) env.gain.setValueAtTime(peak, decayStart);
     // Exponential decay to near-silence, then a hard zero so nothing lingers.
-    env.gain.exponentialRampToValueAtTime(0.0001, start + attack + decay);
-    env.gain.setValueAtTime(0, start + attack + decay);
+    env.gain.exponentialRampToValueAtTime(0.0001, decayStart + decay);
+    env.gain.setValueAtTime(0, decayStart + decay);
 
     let node: AudioNode = env;
     if (layer.filter) {
@@ -98,7 +110,7 @@ export function playSound(
     }
     node.connect(destination);
 
-    const stop = start + attack + decay + 0.02;
+    const stop = decayStart + decay + 0.02;
     if (layer.wave === 'noise') {
       const src = ctx.createBufferSource();
       src.buffer = noiseBuffer(ctx);
@@ -111,10 +123,18 @@ export function playSound(
       const f = layer.freq ?? 440;
       osc.frequency.setValueAtTime(f, start);
       if (layer.freqEnd !== undefined) {
-        osc.frequency.exponentialRampToValueAtTime(
-          Math.max(1, layer.freqEnd),
-          start + attack + decay,
-        );
+        osc.frequency.exponentialRampToValueAtTime(Math.max(1, layer.freqEnd), decayStart + decay);
+      }
+      if (layer.vibrato) {
+        // An LFO driving `detune` — cents, so the depth is pitch-independent.
+        const lfo = ctx.createOscillator();
+        lfo.frequency.setValueAtTime(layer.vibrato.rateHz, start);
+        const depth = ctx.createGain();
+        depth.gain.setValueAtTime(layer.vibrato.depthCents, start);
+        lfo.connect(depth);
+        depth.connect(osc.detune);
+        lfo.start(start);
+        lfo.stop(stop);
       }
       osc.connect(env);
       osc.start(start);

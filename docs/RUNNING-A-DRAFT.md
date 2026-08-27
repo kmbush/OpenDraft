@@ -147,16 +147,18 @@ The top strip shows round, overall pick, and a Live / Paused / Offline indicator
 
 ### Sound (optional)
 
-The board can play cues: a chime as each pick lands, a rising tick through the last ten seconds, a distinctly
-sour sound when the clock expires and the engine picks for someone, and a clack per beat during the reveal.
+The board can play cues: a hit as each pick lands, a whistle when a new team is up, a shot-clock tick through
+the last ten seconds, a **buzzer** when the clock beats someone and the engine picks for them, an air horn and
+a crowd when the draft ends, and a clack per beat during the reveal.
 
 **It is off until you turn it on**, and it has to be — a browser will not start audio without a click, so the
 speaker button in the board's top-right corner is both the switch and the permission. Turn it on once the
 board is on the TV, before the draft starts.
 
 - **Click** the speaker to toggle sound on or off. One click silences everything instantly.
-- **Right-click** it for the **sound packs** — *Broadcast* (warm bells, restrained), *Arcade* (square-wave
-  blips), *Stadium* (low horns and a drum) — and a volume slider.
+- **Right-click** it for the **sound packs** — *Gameday* (broadcast brass, a ref whistle, a shot-clock tick),
+  *Arena* (organ charge, air horns, crowd), *Sideline* (drumline hits and a coach's whistle) — and a volume
+  slider.
 - Your choice is remembered on that device. After a page reload the board still needs one click or keypress
   anywhere before it can make a sound again; that is the browser's rule, not ours.
 
