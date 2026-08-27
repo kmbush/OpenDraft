@@ -114,7 +114,7 @@ function EnvelopeCard({
         boxShadow: `0 0 40px ${color}99, inset 0 0 0 2px rgba(255,255,255,0.15)`,
       }}
     >
-      {finale && <Confetti count={90} />}
+      {finale && <Confetti count={180} colors={[color, '#f8fafc']} />}
       <span
         className={cn(
           'font-black uppercase leading-none tracking-widest opacity-80',

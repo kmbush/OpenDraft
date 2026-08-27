@@ -498,7 +498,8 @@ function RevealBeat({
   const nflTeam = playerTeam(pick.playerId);
   return (
     <div key="reveal" className="relative w-full">
-      <Confetti count={90} />
+      {/* The drafting team's own colours, so a pick celebrates that team. */}
+      <Confetti count={90} colors={[colorOf(pick.teamSlot), '#f8fafc']} />
       <div className="animate-reveal relative flex flex-col items-center px-8 text-center">
         <Eyebrow className="text-base md:text-xl" color={colorOf(pick.teamSlot)}>
           With the {ordinal(pick.overall)} pick, {teamName(pick.teamSlot)} select
@@ -724,7 +725,10 @@ function CompleteView({
   const last = draft.picks.at(-1);
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center gap-6 overflow-hidden px-8 text-center">
-      <Confetti count={140} />
+      {/* The draft is over: one big burst on arrival, then a drift that keeps
+          going, because this screen stays up for the rest of the night. */}
+      <Confetti count={200} />
+      <Confetti count={45} variant="fall" />
       <Trophy className="h-24 w-24 text-amber-400 drop-shadow-[0_0_25px_rgba(245,158,11,0.6)]" />
       <h1
         className="bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-400 bg-clip-text font-black uppercase leading-[0.9] tracking-tight text-transparent"
