@@ -5,9 +5,9 @@
  * reconnecting board renders the exact right frame.
  *
  * Pluggable by design: `RevealShow` switches on `reveal.game` to pick the
- * animation via the `REVEAL_GAMES` registry — adding Plinko / a race later is a
- * new component + one entry, no engine or board-shell change. Only `envelopes`
- * ships today.
+ * animation via the `REVEAL_GAMES` registry — a new show is a component plus one
+ * entry, never an engine or board-shell change. Three ship today: the envelope
+ * lottery, a split-flap departure board, and Plinko.
  */
 import type { DraftState, RevealGame } from '@opendraft/shared';
 import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
@@ -17,6 +17,8 @@ import { Confetti } from '../components/confetti.js';
 import { estimatedServerNow, formatClock } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
 import { readableOn } from '../lib/teams.js';
+import { PlinkoReveal } from './reveal-plinko.js';
+import { SplitFlapReveal } from './reveal-splitflap.js';
 
 /** Props every reveal-game animation receives. */
 export interface RevealGameProps {
@@ -29,7 +31,7 @@ export interface RevealGameProps {
 
 // --- Countdown sub-phase ("THE REVEAL BEGINS IN 0:30…") ---------------------
 
-function RevealCountdown({ remaining }: { remaining: number }) {
+export function RevealCountdown({ remaining }: { remaining: number }) {
   const urgent = remaining <= 10_000;
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center gap-8 overflow-hidden px-8 text-center">
@@ -198,6 +200,8 @@ function EnvelopeReveal({ draft, now, serverOffsetMs, teamName, colorOf }: Revea
 
 const REVEAL_GAMES: Record<RevealGame, ComponentType<RevealGameProps>> = {
   envelopes: EnvelopeReveal,
+  'split-flap': SplitFlapReveal,
+  plinko: PlinkoReveal,
 };
 
 /** Picks the animation for `reveal.game`; blank until the first SYNC lands. */

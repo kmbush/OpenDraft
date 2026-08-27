@@ -12,6 +12,7 @@ import {
   OFFENSE_POSITIONS,
   type Pick,
   type Position,
+  type RevealGame,
 } from '@opendraft/shared';
 import {
   AlertCircle,
@@ -92,6 +93,13 @@ function shuffle(n: number): number[] {
 
 const LINK_BUTTON =
   'inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90';
+
+/** The reveal shows offered at draft time. Ids are checked against `RevealGame`. */
+const REVEAL_SHOWS: { id: RevealGame; label: string; blurb: string }[] = [
+  { id: 'envelopes', label: 'Envelopes', blurb: 'Sealed cards flip open, worst pick first.' },
+  { id: 'split-flap', label: 'Big Board', blurb: 'The draft-hall board clatters into the order.' },
+  { id: 'plinko', label: 'Plinko', blurb: 'A puck per team bounces down into its slot.' },
+];
 
 export function AdminView() {
   const { draft, adminToken } = useLiveStore();
@@ -954,6 +962,7 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
   const pool = usePool(draft?.poolSnapshotId);
   const now = useTicker();
   const [orderText, setOrderText] = useState('');
+  const [revealGame, setRevealGame] = useState<RevealGame>('envelopes');
   const [rewindText, setRewindText] = useState('');
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [draggingOverall, setDraggingOverall] = useState<number | null>(null);
@@ -1202,10 +1211,31 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <p className="font-medium text-sm">Reveal show</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {REVEAL_SHOWS.map((show) => (
+                  <button
+                    key={show.id}
+                    type="button"
+                    onClick={() => setRevealGame(show.id)}
+                    className={cn(
+                      'rounded-lg border p-3 text-left transition-colors',
+                      revealGame === show.id
+                        ? 'border-accent bg-accent/10'
+                        : 'border-border hover:bg-muted',
+                    )}
+                  >
+                    <span className="block font-semibold text-sm">{show.label}</span>
+                    <span className="block text-muted-foreground text-xs">{show.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <Button
               size="lg"
               className="w-full"
-              onClick={() => store.adminAction('START_REVEAL', { game: 'envelopes' })}
+              onClick={() => store.adminAction('START_REVEAL', { game: revealGame })}
             >
               <Clapperboard className="h-5 w-5" /> Run The Reveal 🎬
             </Button>

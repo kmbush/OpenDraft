@@ -14,6 +14,14 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Recently shipped
 
+- [x] **Two more reveal shows** `feature` — the envelope flip wasn't exciting enough for the one moment the
+  whole room watches together. Added **Split-Flap** (a departure board clattering, rows locking bottom-up
+  until #1 tumbles alone) and **Plinko** (a puck per team bouncing down a peg field into its slot), plus an
+  admin picker. Both are pure functions of elapsed time — Plinko's bounce is a precomputed deterministic
+  path rather than a simulation, because physics can't be resumed and a board reconnecting mid-show has no
+  state to resume from. No engine change: `REVEAL_GAMES` is a typed registry, so a missing show is a
+  compile error.
+
 - [x] **Board goes true fullscreen** `feature` — `F` or the header control puts the board on the whole
   display with no browser chrome, cursor and control fading once the room settles. A **screen wake lock**
   rides along, re-acquired on visibility change, so a board nobody touches doesn't screensave mid-draft.
@@ -98,18 +106,20 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 ## In-person event delight
 
-- [ ] **More reveal mini-games** `feature` — the envelope flip is fine but it isn't exciting, and the reveal
-  is the one moment the whole room is watching the screen together. The plumbing is already there: add a
-  board component and one entry to `REVEAL_GAMES` in `apps/web/src/views/reveal.tsx` plus the `RevealGame`
-  union in `packages/shared/src/domain.ts` — **no engine change, no new state**, and the 30s countdown and
-  order-commit stay as they are.
-  *Candidates, roughly hardest-last:* a **split-flap board** clacking down to each name (cheap, very
-  broadcast); a **helmet race** across the screen where positions settle into draft order; **Plinko** with
-  a puck per team; **mystery helmets** turning over one at a time.
-  *Constraints:* stays blind — the order is committed server-side and unveiled only by the animation, and
-  no re-rolls. Reveals run last-pick-first and end on the #1 with confetti; keep that shape so the
-  crescendo doesn't move. Admin picks the game at reveal time (today it is implicit — only one exists).
-  *Done when:* the commissioner can choose from at least two more games and the room reacts.
+- [ ] **Make the celebration effects physical** `feature` — `confetti.tsx` drops uniform squares and circles
+  straight down a single CSS keyframe: same fall for every piece, no drift, no tumble, no depth. It reads as
+  falling shapes rather than confetti, and it's the payoff on every pick and every reveal finale, so it's the
+  most-seen animation in the app.
+  *What's missing, roughly by payoff:* **tumble** (each piece rotating on its own axes, so it catches the eye
+  edge-on then flat); **lateral drift and flutter** (paper doesn't fall vertically — a sine sway with
+  per-piece phase is most of the effect); **depth** (a near/far split driving size, blur and fall speed);
+  **varied shapes** (rectangular streamers and curled ribbons, not just squares); and **a real burst origin**
+  — cannons firing up and outward from the lower corners, rather than everything starting at the top edge.
+  *Constraint:* keep it derived from the piece index like the current one, so a reconnect or re-render never
+  reshuffles a burst mid-show. Prefer transform/opacity so it composites instead of repainting — this lands
+  next to the big-board performance item, and confetti during an announce beat is a suspect there.
+  *Also worth doing:* team-coloured bursts (the drafting team's colour, not the fixed six), and a bigger,
+  longer finale burst for the #1 reveal than for a routine pick.
 
 
 

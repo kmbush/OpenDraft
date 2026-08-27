@@ -39,11 +39,23 @@ export type DraftStatus =
   | 'COMPLETE';
 
 /**
- * A draft-order reveal game (DESIGN "The Reveal"). Only the envelope draft
- * lottery ships today; the type is a union so new shows (Plinko, a race, …) are
- * a new literal + a board component, never an engine change.
+ * The draft-order reveal shows (DESIGN "The Reveal"). A new show is a literal
+ * here plus a board component — never an engine change: the engine only commits
+ * the order and schedules the end, and every animation is derived client-side
+ * from `revealAt`.
+ *
+ * All shipped shows share one beat structure (lead-in → one beat per pick, last
+ * pick first → finale on #1 → outro), which is why `revealAnimationMs` stays
+ * game-agnostic. A show that wants a different beat count — an elimination
+ * format, say — is where that would have to change.
  */
-export type RevealGame = 'envelopes';
+export const REVEAL_GAME_IDS = ['envelopes', 'split-flap', 'plinko'] as const;
+
+export type RevealGame = (typeof REVEAL_GAME_IDS)[number];
+
+export function isRevealGame(value: unknown): value is RevealGame {
+  return typeof value === 'string' && (REVEAL_GAME_IDS as readonly string[]).includes(value);
+}
 
 /**
  * A draftable player. Deliberately has NO ranking fields, ever (CONVENTIONS §5)
