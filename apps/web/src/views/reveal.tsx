@@ -14,6 +14,8 @@ import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
 import { Sparkles, Ticket } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Confetti } from '../components/confetti.js';
+import { useStepCue } from '../hooks/useBoardSounds.js';
+import type { SoundEvent } from '../lib/audio/packs.js';
 import { estimatedServerNow, formatClock } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
 import { readableOn } from '../lib/teams.js';
@@ -27,6 +29,8 @@ export interface RevealGameProps {
   serverOffsetMs: number;
   teamName: (slot: number) => string;
   colorOf: (slot: number) => string;
+  /** Board soundboard. A no-op when sound is off, so shows never have to check. */
+  play: (event: SoundEvent, velocity?: number) => void;
 }
 
 // --- Countdown sub-phase ("THE REVEAL BEGINS IN 0:30…") ---------------------
@@ -135,18 +139,22 @@ function EnvelopeCard({
   );
 }
 
-function EnvelopeReveal({ draft, now, serverOffsetMs, teamName, colorOf }: RevealGameProps) {
+function EnvelopeReveal({ draft, now, serverOffsetMs, teamName, colorOf, play }: RevealGameProps) {
   const reveal = draft.reveal;
-  if (!reveal) return null;
   const teams = draft.order.length;
-  const elapsed = estimatedServerNow(now, serverOffsetMs) - reveal.revealAt;
-
-  if (elapsed < 0) return <RevealCountdown remaining={-elapsed} />;
-
+  // Everything the cues need is computed before any early return — hooks must run
+  // on every render, and this component has two exits below.
+  const elapsed = reveal ? estimatedServerNow(now, serverOffsetMs) - reveal.revealAt : -1;
   // The #1 finale opens last; the "order is set" outro follows its flourish.
   const finaleOpen = elapsed >= pickRevealAtMs(1, teams);
   const outro = elapsed >= pickRevealAtMs(1, teams) + REVEAL_FINALE_MS;
   const opened = draft.order.filter((_, i) => elapsed >= pickRevealAtMs(i + 1, teams)).length;
+
+  useStepCue(opened, 'reveal-beat', play);
+  useStepCue(finaleOpen ? 1 : 0, 'reveal-finale', play);
+
+  if (!reveal) return null;
+  if (elapsed < 0) return <RevealCountdown remaining={-elapsed} />;
 
   // Picks #2..#N (the grid). #1 is the featured card up top.
   const rest = draft.order.slice(1);

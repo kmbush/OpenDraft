@@ -14,6 +14,17 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Recently shipped
 
+- [x] **The board has sound** `feature` — a registry of named board moments (pick made, on the clock, timer
+  warning, per-second tick, auto-pick, draft complete, reveal beat, reveal finale) mapped to sounds by
+  swappable **packs**: *Broadcast*, *Arcade*, *Stadium*. `SoundPack` is a total record over the event list, so
+  a pack that forgets a cue is a compile error rather than a silence nobody notices on draft night.
+  Sounds are **synthesised** with Web Audio — no audio files in the repo, no sample licensing, and a pack is
+  plain data, so theming the room is a config change.
+  Off until switched on, and it has to be: a browser won't start audio without a gesture, so the speaker
+  button is both the switch and the permission (the same constraint fullscreen has). One click silences
+  everything; right-click picks the pack and volume; the choice persists per device.
+  The reveal shows finally got their clack — the thing that was missing from the Big Board.
+
 - [x] **Board re-rendered four times a second doing nothing** `bug` — `useTicker` sat at the top of
   `BoardView`, so every 250ms React re-rendered the picks rail, on-deck queue and hero, none of which depend
   on the time. The clock now ticks inside `CountdownRing` — the smallest subtree that needs it — on the
@@ -130,12 +141,8 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 - [ ] **QR join codes** `feature` — render the admin's `?draft=` board/station links as QR codes so players
   scan to open their station on a phone (fits the "extra clients may connect" model).
-- [ ] **Audio + on-the-clock takeover** `feature` — chime on each pick, escalating tick as the timer runs
-  low, a distinct sound when auto-pick fires; board shows a big "YOU'RE UP — team X."
-- [ ] **Sound-effects system (event slots)** `feature` — a small registry mapping board events (pick made,
-  on the clock, timer warning, auto-pick, reveal beats) to sound effects, with a toggle and swappable
-  "packs" so a host can theme the room. Generalizes the on-the-clock cue above into pluggable slots; also
-  the hook TTS/AI-mode narration plugs into.
+
+
 - [ ] **Pick celebration ticker / "up next"** `feature` — brief flourish per pick (reuse `confetti.tsx` /
   reveal infra) and a preview of who's next.
 

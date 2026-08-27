@@ -13,6 +13,7 @@
 import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
 import { ListOrdered } from 'lucide-react';
 import { Confetti } from '../components/confetti.js';
+import { useStepCue } from '../hooks/useBoardSounds.js';
 import { useRafNow } from '../hooks/useRafNow.js';
 import { estimatedServerNow } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
@@ -129,16 +130,15 @@ export function SplitFlapReveal({
   serverOffsetMs,
   teamName,
   colorOf,
+  play,
 }: RevealGameProps) {
   // The board's 250ms ticker is far too coarse for a drum turning every 55ms;
   // sampled that slowly the cycling reads as noise rather than a machine.
   const rafNow = useRafNow();
   const reveal = draft.reveal;
-  if (!reveal) return null;
-
   const teams = draft.order.length;
-  const elapsed = estimatedServerNow(rafNow || now, serverOffsetMs) - reveal.revealAt;
-  if (elapsed < 0) return <RevealCountdown remaining={-elapsed} />;
+  // Computed above the early returns below, because the cues are hooks.
+  const elapsed = reveal ? estimatedServerNow(rafNow || now, serverOffsetMs) - reveal.revealAt : -1;
 
   const names = draft.order.map((slot) => teamName(slot));
   const cols = boardWidth(names);
@@ -146,6 +146,13 @@ export function SplitFlapReveal({
   const finaleOpen = elapsed >= finaleAt;
   const outro = elapsed >= finaleAt + REVEAL_FINALE_MS;
   const locked = draft.order.filter((_, i) => elapsed >= pickRevealAtMs(i + 1, teams)).length;
+
+  // The clack. Each row locking is a beat.
+  useStepCue(locked, 'reveal-beat', play);
+  useStepCue(finaleOpen ? 1 : 0, 'reveal-finale', play);
+
+  if (!reveal) return null;
+  if (elapsed < 0) return <RevealCountdown remaining={-elapsed} />;
 
   return (
     <div className="relative flex flex-1 flex-col items-center gap-[2vh] overflow-hidden px-8 py-[3vh]">
