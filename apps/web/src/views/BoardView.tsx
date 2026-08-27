@@ -22,6 +22,7 @@ import { ConnectionNotice } from '../components/connection-notice.js';
 import { PositionBadge } from '../components/position-badge.js';
 import { useConnectionPhase } from '../hooks/useConnectionPhase.js';
 import { useCountdownSweep } from '../hooks/useCountdownSweep.js';
+import { useDeadlineClock } from '../hooks/useDeadlineClock.js';
 import { type Fullscreen, useFullscreen, useIdle } from '../hooks/useFullscreen.js';
 import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useRowCapacity } from '../hooks/useRowCapacity.js';
@@ -103,17 +104,27 @@ function CountdownRing({
   deadline,
   serverOffsetMs,
   timerMs,
-  label,
-  color,
-  urgent,
+  accent,
 }: {
   deadline: number | undefined;
   serverOffsetMs: number;
   timerMs: number;
-  label: string;
-  color: string;
-  urgent: boolean;
+  accent: string;
 }) {
+  // The clock ticks here and nowhere above. Every level this sits below is a
+  // subtree that would otherwise re-render on a timer for the whole length of a
+  // pick without depending on the time.
+  //
+  // It ticks on the second boundary rather than a free-running interval, so the
+  // digits turn over on the beat. A 250ms interval flipped them up to a quarter
+  // second late by a varying amount, which on a board-sized clock reads as lag
+  // even while the ring beside it is delivering every frame.
+  const remaining = useDeadlineClock(deadline, serverOffsetMs);
+  const urgent = remaining <= 10_000;
+  const warning = remaining <= 30_000 && !urgent;
+  const color = urgent ? '#ef4444' : warning ? '#f59e0b' : accent;
+  const label = formatClock(remaining);
+
   const r = 150;
   const c = 2 * Math.PI * r;
   const sweepRef = useCountdownSweep(deadline, serverOffsetMs, timerMs, c);
@@ -276,9 +287,6 @@ function ClockHero({
   deadline,
   serverOffsetMs,
   timerMs,
-  clockLabel,
-  color,
-  urgent,
 }: {
   teamName: string;
   accent: string;
@@ -287,9 +295,6 @@ function ClockHero({
   deadline: number | undefined;
   serverOffsetMs: number;
   timerMs: number;
-  clockLabel: string;
-  color: string;
-  urgent: boolean;
 }) {
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center gap-6 overflow-hidden px-8">
@@ -318,9 +323,7 @@ function ClockHero({
           deadline={deadline}
           serverOffsetMs={serverOffsetMs}
           timerMs={timerMs}
-          label={clockLabel}
-          color={color}
-          urgent={urgent}
+          accent={accent}
         />
       </div>
     </div>
@@ -786,7 +789,14 @@ export function BoardView() {
     return () => window.removeEventListener('keydown', onKey);
   }, [fs]);
   const { draft, serverOffsetMs, connected } = state;
-  const now = useTicker();
+  // Only the phases that actually display a countdown need the board to re-render
+  // on a timer. ON_CLOCK — the long steady state — no longer does: its clock ticks
+  // inside ClockHero, so the picks rail and on-deck queue stop re-rendering with it.
+  const boardNeedsTick =
+    state.draft?.status === 'PICK_IN' ||
+    state.draft?.status === 'STARTING' ||
+    state.draft?.status === 'REVEALING';
+  const now = useTicker(250, boardNeedsTick);
   const pool = usePool(draft?.poolSnapshotId);
   const byId = useMemo(() => indexPlayers(pool.players), [pool.players]);
 
@@ -818,7 +828,6 @@ export function BoardView() {
   const totalPicks = settings.teams * settings.rounds;
   const timerMs = settings.timerSec * 1000;
   const waitingMs = settings.waitingSec * 1000;
-  const remaining = remainingMs(draft.pickDeadline, serverOffsetMs, now);
 
   const nameOf = (id: string) => playerName(byId, id);
   const playerTeam = (id: string) => byId.get(id)?.team ?? '';
@@ -876,9 +885,6 @@ export function BoardView() {
   // Clock visuals (clock phase). The ring rides the on-clock team's color, then
   // escalates to amber < 30s and red < 10s so urgency always overrides identity.
   const onClockColor = onClockSlot ? colorOf(onClockSlot) : '#e2e8f0';
-  const urgent = remaining <= 10_000;
-  const warning = remaining <= 30_000 && !urgent;
-  const clockColor = urgent ? '#ef4444' : warning ? '#f59e0b' : onClockColor;
 
   return (
     <div
@@ -948,9 +954,6 @@ export function BoardView() {
               deadline={draft.pickDeadline}
               serverOffsetMs={serverOffsetMs}
               timerMs={timerMs}
-              clockLabel={formatClock(remaining)}
-              color={clockColor}
-              urgent={urgent}
             />
             <OnDeck items={onDeck} teamName={teamName} colorOf={colorOf} />
           </div>

@@ -14,6 +14,17 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Recently shipped
 
+- [x] **Board re-rendered four times a second doing nothing** `bug` — `useTicker` sat at the top of
+  `BoardView`, so every 250ms React re-rendered the picks rail, on-deck queue and hero, none of which depend
+  on the time. The clock now ticks inside `CountdownRing` — the smallest subtree that needs it — on the
+  second boundary rather than a free-running interval, and the board-level ticker only runs in phases that
+  actually show a countdown. Measured at 4x CPU throttle over 5s: total main-thread 724ms → 639ms, style
+  recalc 141ms → 107ms, script 254ms → 214ms.
+  *Found while investigating the "choppy countdown ring", which turned out not to be a rendering problem at
+  all — see "Mirroring-friendly board mode". Two hypotheses died on the way: `stroke-dashoffset` repaint
+  (disabling the filters and gradients barely moved anything) and label jitter (250 divides 1000, so the
+  flips were perfectly even — a test pins that).*
+
 - [x] **Celebration effects are physical now** `feature` — confetti dropped uniform squares straight down one
   keyframe with a flat `rotate(720deg)`, which never presents an edge, so it read as spinning stickers. Pieces
   now **tumble on three axes** at deliberately unequal periods (so they turn edge-on and briefly vanish),
@@ -130,23 +141,18 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 ## Platform & reach
 
-- [ ] **Performance pass on the big board** `bug` — the countdown ring still reads choppy on a big screen,
-  *after* the `useCountdownSweep` fix. That fix removed the React re-render from the sweep (rAF writing
-  `stroke-dashoffset` on a ref, measured 89% → 1% stalled frames under simulated contention), so the
-  remaining stutter is **not** re-renders and **not** a network call — the sweep makes neither. It needs
-  measuring on the actual TV rather than another assumption.
-  *Leading suspect:* animating `stroke-dashoffset` forces a **repaint of the ring's bounding box every
-  frame** — it is not GPU-composited like `transform`/`opacity`. On a 4K panel that is a large area, 60×
-  a second, on top of the board's gradients and vignette. Worth testing a transform-based ring (rotating a
-  half-circle mask) or isolating the ring on its own layer.
-  *Other things to rule out:* the 250ms `useTicker` re-rendering the whole board (a big DOM at 4K), the
-  radial-gradient background and backdrop blurs repainting with it, confetti during announce beats, and
-  whether the TV is actually driving 60Hz or the browser is throttling.
-  *Hard constraint:* the countdown must stay **deadline-derived** (AD-1) — remote players read the same
-  clock, and a fix that smooths the paint by drifting the time source would desync them and cost someone a
-  pick. Change how it is painted, never where the time comes from.
-  *Done when:* measured frame timings on the real display, before and after, with the deadline still the
-  single source of truth.
+- [ ] **Mirroring-friendly board mode** `feature` — the board is often put on the TV over **AirPlay**, which
+  re-encodes the screen to H.264 at roughly 30fps over wifi. The browser renders perfectly (measured: 240Hz,
+  zero dropped frames); the TV shows a resampled, recompressed version, which is what reads as choppy. The
+  real answer is not to mirror — open the `?draft=` board URL directly on whatever drives the TV — so this
+  item is for when mirroring is unavoidable.
+  *What to change:* the ring's `drop-shadow` glow is a soft gradient on a **moving** edge, the worst case for
+  mosquito noise; the `animate-breathe` 70vh blurred radial glow is a large slowly-shifting gradient that low
+  bitrates smear; dark subtle gradients band. A mode with flatter fills, no animated blur and harder edges
+  would look better over a stream while looking slightly plainer natively.
+  *Pairs with:* **QR join codes** — scanning the board link onto the TV device is the fix that avoids all of
+  this.
+
 
 
 - [ ] **PWA / installable shell** `feature` — the shared laptop opens instantly and survives wifi drops.
