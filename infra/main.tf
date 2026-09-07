@@ -51,12 +51,17 @@ module "apigw_http" {
   name               = "${local.name_prefix}-http"
   http_invoke_arn    = local.invoke_arn.http
   cors_allow_origins = local.web_allowed_origins
+  # Explicit, not a {proxy+} catch-all: the gateway is a second place a route has
+  # to be declared, and a handler branch without one 404s at the edge with the
+  # handler never running. Add here in the same change as `core/http.ts`.
   routes = [
     "POST /admin/session",
     "POST /leagues",
     "GET /leagues/{id}",
     "POST /leagues/{id}/drafts",
+    "GET /leagues/{id}/drafts",
     "GET /leagues/{id}/drafts/{draftId}",
+    "PATCH /leagues/{id}/drafts/{draftId}",
     "PUT /leagues/{id}/drafts/{draftId}/order",
     "GET /leagues/{id}/drafts/{draftId}/pool",
   ]
