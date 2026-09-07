@@ -33,7 +33,13 @@ const TEAMS: Team[] = [
 
 /** A draft started and ON_CLOCK for team 1 (linear). version = 2 (SET_ORDER, START). */
 export function liveDraft(): DraftState {
-  let s = newDraft({ leagueId: 'L1', draftId: 'D1', settings: SETTINGS, teams: TEAMS });
+  let s = newDraft({
+    leagueId: 'L1',
+    draftId: 'D1',
+    settings: SETTINGS,
+    teams: TEAMS,
+    createdAt: 0,
+  });
   s = reduce(s, { type: 'SET_ORDER', order: [1, 2] }, { now: 0 }).state;
   s = reduce(s, { type: 'START' }, { now: 0 }).state;
   return { ...s, poolSnapshotId: '2026-07-03' };

@@ -2,7 +2,16 @@
  * In-memory port fakes + a spy broadcaster for testing the core pipeline without
  * AWS (CONVENTIONS §6). Not a test file.
  */
-import type { DraftState, LeagueMeta, OutboundMessage, PoolSnapshot } from '@opendraft/shared';
+import {
+  type DraftMetaPatch,
+  type DraftState,
+  type DraftSummary,
+  type LeagueMeta,
+  type OutboundMessage,
+  type PoolSnapshot,
+  byNewest,
+  summarizeDraft,
+} from '@opendraft/shared';
 import type {
   Broadcaster,
   CommitResult,
@@ -28,6 +37,34 @@ export class FakePersistence implements Persistence {
 
   seed(state: DraftState): void {
     this.drafts.set(this.draftKey(state.leagueId, state.draftId), clone(state));
+  }
+
+  async listDrafts(leagueId: string): Promise<DraftSummary[]> {
+    return [...this.drafts.values()]
+      .filter((d) => d.leagueId === leagueId)
+      .map(summarizeDraft)
+      .sort(byNewest);
+  }
+
+  async updateDraftMeta(
+    leagueId: string,
+    draftId: string,
+    patch: DraftMetaPatch,
+  ): Promise<boolean> {
+    const key = this.draftKey(leagueId, draftId);
+    const current = this.drafts.get(key);
+    if (!current) return false;
+    const next = { ...current };
+    if (patch.name !== undefined) {
+      if (patch.name === null) next.name = undefined;
+      else next.name = patch.name;
+    }
+    if (patch.archived !== undefined) {
+      next.archivedAt = patch.archived ? Date.now() : undefined;
+    }
+    // Version untouched on purpose — see the port.
+    this.drafts.set(key, next);
+    return true;
   }
 
   async loadDraft(leagueId: string, draftId: string): Promise<DraftState | null> {

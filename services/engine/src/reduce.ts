@@ -12,6 +12,7 @@ import {
   type Position,
   REVEAL_COUNTDOWN_MS,
   type RejectCode,
+  canEndDraft,
 } from '@opendraft/shared';
 import { isValidOrder, pickInRound, roundForOverall, slotForOverallPick } from './ordering.js';
 import { legalCandidates, rosterCounts } from './roster.js';
@@ -364,6 +365,40 @@ function resume(state: DraftState, ctx: ReduceContext): ReduceResult {
   return sync(next, ctx);
 }
 
+/**
+ * Stop the draft where it stands.
+ *
+ * Every timed field is cleared, which is also how the scheduler gets cancelled:
+ * `honorDeadline` returns nothing for COMPLETE, so the backstop is torn down by
+ * the same transition rather than by a second, forgettable step.
+ */
+function endDraft(state: DraftState, ctx: ReduceContext): ReduceResult {
+  if (state.status === 'COMPLETE') {
+    return reject(state, 'BAD_STATE', 'This draft has already finished.');
+  }
+  if (!canEndDraft(state.status)) {
+    return reject(
+      state,
+      'BAD_STATE',
+      "This draft hasn't started — leave it rather than ending it.",
+    );
+  }
+  const next: DraftState = {
+    ...state,
+    status: 'COMPLETE',
+    // The picks that were made stand; what's missing is simply missing.
+    endedEarly: true,
+    pickDeadline: undefined,
+    liveAt: undefined,
+    announceUntil: undefined,
+    pausedRemainingMs: undefined,
+    pendingPick: undefined,
+    reveal: undefined,
+    version: state.version + 1,
+  };
+  return sync(next, ctx);
+}
+
 function undo(state: DraftState, ctx: ReduceContext): ReduceResult {
   if (state.picks.length === 0) {
     return reject(state, 'NOTHING_TO_UNDO', 'There are no picks to undo.');
@@ -539,6 +574,8 @@ export function reduce(state: DraftState, event: DraftEvent, ctx: ReduceContext)
       return reassignPick(state, event, ctx);
     case 'REMOVE_PICK':
       return removePick(state, event, ctx);
+    case 'END_DRAFT':
+      return endDraft(state, ctx);
     case 'REWIND_TO':
       return rewindTo(state, event, ctx);
   }

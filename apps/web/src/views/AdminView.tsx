@@ -7,16 +7,25 @@
  */
 import { roundForOverall } from '@opendraft/engine';
 import {
+  DRAFT_NAME_MAX,
+  type DraftMetaPatch,
   type DraftSettings,
+  type DraftStatus,
+  type DraftSummary,
   IDP_POSITIONS,
   OFFENSE_POSITIONS,
   type Pick,
   type Position,
   type RevealGame,
+  canEndDraft,
+  draftLabel,
 } from '@opendraft/shared';
 import {
   AlertCircle,
+  Archive,
+  ArchiveRestore,
   CheckCircle2,
+  ChevronLeft,
   Clapperboard,
   Clock,
   ExternalLink,
@@ -30,17 +39,20 @@ import {
   MonitorPlay,
   Palette,
   Pause,
+  Pencil,
   Play,
   Plus,
   Rocket,
   RotateCcw,
   Shuffle,
   SkipForward,
+  Square,
   Tv,
   Users,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ConnectionNotice } from '../components/connection-notice.js';
 import { PositionBadge } from '../components/position-badge.js';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert.js';
 import { Badge } from '../components/ui/badge.js';
@@ -56,6 +68,8 @@ import { Input } from '../components/ui/input.js';
 import { Modal } from '../components/ui/modal.js';
 import { Select } from '../components/ui/select.js';
 import { Separator } from '../components/ui/separator.js';
+import { useConnectionPhase } from '../hooks/useConnectionPhase.js';
+import { useDrafts } from '../hooks/useDrafts.js';
 import { useLeague } from '../hooks/useLeague.js';
 import {
   fetchLatestSnapshotId,
@@ -70,6 +84,7 @@ import { cn } from '../lib/cn.js';
 import { poolAge } from '../lib/poolAge.js';
 import { POSITION_COLOR } from '../lib/positions.js';
 import { ROSTER_PRESETS, type RosterSpec, buildRosterFormat } from '../lib/roster.js';
+import { navigate, useDraftParam, useRoute } from '../lib/route.js';
 import {
   DEFAULT_SETUP_SEED,
   type SetupSeed,
@@ -101,13 +116,328 @@ const REVEAL_SHOWS: { id: RevealGame; label: string; blurb: string }[] = [
   { id: 'plinko', label: 'Plinko', blurb: 'A puck per team bounces down into its slot.' },
 ];
 
+/**
+ * A draft id with no state behind it yet — opening one from the hub, or a
+ * `?draft=` link still connecting.
+ *
+ * Reuses the board and station's diagnosis rather than a spinner of its own, so
+ * a wrong id says so instead of hanging. Always offers the way back, because on
+ * the console a dead end is one click from every draft you own.
+ */
+function OpeningDraft() {
+  const phase = useConnectionPhase();
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 py-12">
+      <ConnectionNotice phase={phase} />
+      <div className="flex justify-center">
+        <Button variant="outline" onClick={leaveDraft}>
+          <ChevronLeft className="h-4 w-4" /> Back to drafts
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function AdminView() {
-  const { draft, adminToken } = useLiveStore();
-  // Carries a finished draft's config across the Controls → Setup switch so the
-  // next draft's form is pre-filled (null = first-run defaults).
-  const [seed, setSeed] = useState<SetupSeed | null>(null);
+  const { draft, adminToken, draftId } = useLiveStore();
+  const route = useRoute();
+  const urlDraft = useDraftParam();
+  // Carries a finished draft's config into the new-draft form so it arrives
+  // pre-filled. Not in the URL: it is a convenience, not a location, and it
+  // survives navigation because this component never unmounts.
+  const [seed, setSeed] = useState<SetupSeed>(DEFAULT_SETUP_SEED);
+
+  /**
+   * The URL says which draft is open; this makes it true.
+   *
+   * Every way in goes through the address bar — clicking a row, refreshing,
+   * Back, Forward — so there is one path to being connected and no way to sit
+   * looking at a draft the URL has already left. `main.tsx` performs the same
+   * connect at boot, which this sees as already-satisfied rather than repeating.
+   */
+  useEffect(() => {
+    const live = useLiveStore.getState();
+    if (urlDraft) {
+      if (urlDraft === draftId) return;
+      // Board and station on this machine have no other way to find a draft.
+      localStorage.setItem('opendraft.draftId', urlDraft);
+      live.setDraftId(urlDraft);
+      connect(urlDraft, 'admin');
+      return;
+    }
+    if (!draftId) return;
+    // A draft left SYNCing would race the next one into the store.
+    disconnect();
+    localStorage.removeItem('opendraft.draftId');
+    live.resetDraft();
+  }, [urlDraft, draftId]);
+
   if (!adminToken) return <Login />;
-  return draft ? <Controls onNewDraft={setSeed} /> : <Setup seed={seed ?? DEFAULT_SETUP_SEED} />;
+  // The route wins over a loaded draft, so "start a new draft" from a finished
+  // one lands on the form rather than bouncing back into the console.
+  if (route === 'admin-new') {
+    return <Setup seed={seed} onCancel={() => navigate('/admin')} />;
+  }
+  if (draft) return <Controls onNewDraft={setSeed} />;
+  // An id but no state yet: say what's happening rather than flashing the hub
+  // and swapping it out from under the click.
+  if (draftId) return <OpeningDraft />;
+  return <Hub />;
+}
+
+/**
+ * Open a draft — by moving the URL, and nothing else.
+ *
+ * Connecting is the job of the reconciler in `AdminView`, because the browser can
+ * navigate here on its own: pressing Back into `?draft=X` has to open X exactly
+ * the way clicking the row does, and that is only true if there is one path.
+ */
+function openDraft(id: string): void {
+  navigate(`/admin?draft=${encodeURIComponent(id)}`);
+}
+
+/**
+ * Close the draft on screen and go back to the hub. Changes nothing about the
+ * draft — it keeps running, and any board or station stays connected.
+ */
+function leaveDraft(): void {
+  navigate('/admin');
+}
+
+const STATUS_LABEL: Record<DraftStatus, string> = {
+  SETUP: 'Not started',
+  ORDER_SET: 'Order set',
+  REVEALING: 'Revealing order',
+  STARTING: 'Starting',
+  ON_CLOCK: 'On the clock',
+  PICK_IN: 'Pick is in',
+  PAUSED: 'Paused',
+  COMPLETE: 'Complete',
+};
+
+/** Live states earn the accent; everything else is quiet. */
+const LIVE_STATUSES: readonly DraftStatus[] = ['ON_CLOCK', 'PICK_IN', 'STARTING', 'REVEALING'];
+
+function DraftRow({
+  summary,
+  onPatch,
+}: {
+  summary: DraftSummary;
+  onPatch: (draftId: string, patch: DraftMetaPatch) => Promise<void>;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(summary.name ?? '');
+  const total = summary.teams * summary.rounds;
+  const live = LIVE_STATUSES.includes(summary.status);
+  const archived = Boolean(summary.archivedAt);
+  const when = summary.createdAt
+    ? new Date(summary.createdAt).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : 'Date not recorded';
+
+  // Always offered, never hidden. A control that disappears when it doesn't
+  // apply teaches nothing — it just reads as missing — so this stays put and
+  // says why it's unavailable instead.
+  const canArchive = archived || summary.status === 'COMPLETE';
+  const archiveHint = archived
+    ? 'Bring this draft back into the list'
+    : summary.status === 'COMPLETE'
+      ? 'Archive — hides it from this list. Nothing is deleted.'
+      : 'Only a finished draft can be archived. End it first.';
+
+  const submitRename = async () => {
+    setRenaming(false);
+    const next = nameDraft.trim();
+    if (next === (summary.name ?? '')) return;
+    await onPatch(summary.draftId, { name: next || null });
+  };
+
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3',
+        archived && 'opacity-60',
+      )}
+    >
+      <div className="min-w-0 flex-1 space-y-1">
+        {renaming ? (
+          <Input
+            autoFocus
+            maxLength={DRAFT_NAME_MAX}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={submitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void submitRename();
+              if (e.key === 'Escape') {
+                setNameDraft(summary.name ?? '');
+                setRenaming(false);
+              }
+            }}
+            placeholder="Name this draft"
+            aria-label="Draft name"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRenaming(true)}
+            className="flex max-w-full items-center gap-1.5 truncate text-left font-semibold hover:text-accent"
+            title="Rename this draft"
+          >
+            <span className="truncate">{draftLabel(summary)}</span>
+            <Pencil className="h-3 w-3 shrink-0 opacity-40" />
+          </button>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={live ? 'default' : 'secondary'}>{STATUS_LABEL[summary.status]}</Badge>
+          {summary.endedEarly && <Badge variant="outline">Ended early</Badge>}
+          {archived && <Badge variant="outline">Archived</Badge>}
+          <span className="text-xs text-muted-foreground">
+            {summary.teams} teams · {summary.rounds} rounds · {when} · {summary.picksMade} of{' '}
+            {total} picks
+          </span>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <a
+          href={`/export?draft=${summary.draftId}`}
+          target="_blank"
+          rel="noreferrer"
+          className={LINK_BUTTON}
+        >
+          <FileDown className="h-4 w-4" /> Export <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+        {/* The title rides on a wrapper: a disabled button has pointer-events-none
+            and would never show a tooltip of its own — which is exactly when the
+            explanation matters most. */}
+        <span title={archiveHint}>
+          <Button
+            variant="ghost"
+            disabled={!canArchive}
+            aria-label={archiveHint}
+            onClick={() => void onPatch(summary.draftId, { archived: !archived })}
+          >
+            {archived ? (
+              <>
+                <ArchiveRestore className="h-4 w-4" /> Unarchive
+              </>
+            ) : (
+              <>
+                <Archive className="h-4 w-4" /> Archive
+              </>
+            )}
+          </Button>
+        </span>
+        <Button variant="outline" onClick={() => openDraft(summary.draftId)}>
+          Open
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The admin hub — the console's home when no draft is loaded.
+ *
+ * Before this, a commissioner with no draft in `localStorage` landed straight on
+ * the new-draft form, and every past draft was unreachable without its UUID. The
+ * hub makes the league's history the thing you land on, and creating a draft one
+ * choice among several.
+ */
+function Hub() {
+  const { drafts, loading, error, patchError, refetch, patch } = useDrafts();
+  const league = useLeague();
+  const [showArchived, setShowArchived] = useState(false);
+
+  const archivedCount = drafts.filter((d) => d.archivedAt).length;
+  const visible = showArchived ? drafts : drafts.filter((d) => !d.archivedAt);
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {league?.name ?? 'Commissioner console'}
+          </h1>
+          <p className="text-muted-foreground">Open a past draft, or start a new one.</p>
+        </div>
+        <Button onClick={() => navigate('/admin/new')}>
+          <FilePlus2 className="h-4 w-4" /> New draft
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+          <div>
+            <CardTitle className="text-base">Drafts</CardTitle>
+            <CardDescription>
+              Every draft this league has run. Archiving only hides a draft — nothing here is ever
+              deleted. Click a name to rename it.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1">
+            {archivedCount > 0 && (
+              <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
+                {showArchived ? 'Hide' : 'Show'} archived ({archivedCount})
+              </Button>
+            )}
+            <Button variant="ghost" onClick={refetch} aria-label="Refresh the draft list">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {loading && (
+            <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading drafts…
+            </p>
+          )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex-1">
+                <AlertTitle>Couldn't load your drafts</AlertTitle>
+                <AlertDescription>{error.message}</AlertDescription>
+              </div>
+            </Alert>
+          )}
+
+          {patchError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex-1">
+                <AlertTitle>That change didn't stick</AlertTitle>
+                <AlertDescription>{patchError.message}</AlertDescription>
+              </div>
+            </Alert>
+          )}
+
+          {!loading && !error && visible.length === 0 && drafts.length > 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Every draft is archived. Use “Show archived” to see them.
+            </p>
+          )}
+
+          {!loading && !error && drafts.length === 0 && (
+            <div className="py-8 text-center">
+              <History className="mx-auto h-8 w-8 text-muted-foreground/40" />
+              <p className="mt-2 text-sm font-medium">No drafts yet</p>
+              <p className="text-sm text-muted-foreground">
+                Your first draft will show up here, and stay here.
+              </p>
+            </div>
+          )}
+
+          {visible.map((d) => (
+            <DraftRow key={d.draftId} summary={d} onPatch={patch} />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -414,10 +744,13 @@ function RosterEditor({
   );
 }
 
-function Setup({ seed }: { seed: SetupSeed }) {
+function Setup({ seed, onCancel }: { seed: SetupSeed; onCancel: () => void }) {
   const store = useLiveStore();
   const [name, setName] = useState(seed.name);
   const [teams, setTeams] = useState(seed.teams);
+  // Not carried over from a previous draft's seed: last year's name on this
+  // year's draft is worse than no name at all.
+  const [draftName, setDraftName] = useState('');
   const [teamRows, setTeamRows] = useState<TeamConfig[]>(seed.teamRows);
   const [rounds, setRounds] = useState(seed.rounds);
   const [mode, setMode] = useState<'snake' | 'linear'>(seed.mode);
@@ -516,12 +849,16 @@ function Setup({ seed }: { seed: SetupSeed }) {
       const id = poolSnapshotId.trim();
       const created = await api.post<{ draftId: string }>(
         `/leagues/${LEAGUE_ID}/drafts`,
-        { settings, teams: teamsPayload, ...(id ? { poolSnapshotId: id } : {}) },
+        {
+          settings,
+          teams: teamsPayload,
+          ...(draftName.trim() ? { name: draftName.trim() } : {}),
+          ...(id ? { poolSnapshotId: id } : {}),
+        },
         token,
       );
-      localStorage.setItem('opendraft.draftId', created.draftId);
-      store.setDraftId(created.draftId);
-      connect(created.draftId, 'admin');
+      // Leave the form for the draft it just made — the URL move connects it.
+      openDraft(created.draftId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Create failed');
     } finally {
@@ -536,9 +873,14 @@ function Setup({ seed }: { seed: SetupSeed }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">New draft</h1>
-        <p className="text-muted-foreground">Configure the format, then start the draft.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">New draft</h1>
+          <p className="text-muted-foreground">Configure the format, then start the draft.</p>
+        </div>
+        <Button variant="ghost" onClick={onCancel}>
+          <ChevronLeft className="h-4 w-4" /> Back to drafts
+        </Button>
       </div>
 
       <Card>
@@ -548,6 +890,14 @@ function Setup({ seed }: { seed: SetupSeed }) {
         <CardContent className="space-y-4">
           <Field label="League name">
             <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Draft name (optional)">
+            <Input
+              value={draftName}
+              maxLength={DRAFT_NAME_MAX}
+              onChange={(e) => setDraftName(e.target.value)}
+              placeholder="2026 Redraft — what you'll look for in the hub later"
+            />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Teams">
@@ -774,30 +1124,57 @@ interface Confirmation {
   title: string;
   description: React.ReactNode;
   confirmLabel: string;
+  /**
+   * Demand these exact words before the action unlocks. For the handful of
+   * actions where a reflexive click on a familiar-looking dialog is itself the
+   * risk — a muscle-memory Enter should not be able to end a live draft.
+   */
+  typeToConfirm?: string;
   onConfirm: () => void;
 }
 
 /** Small modal for confirming destructive admin actions (screenshot-friendly). */
 function ConfirmDialog({ req, onClose }: { req: Confirmation; onClose: () => void }) {
+  const [typed, setTyped] = useState('');
+  // Case- and whitespace-insensitive: this is a speed bump for the hand, not a
+  // spelling test for someone already having a bad night.
+  const unlocked =
+    !req.typeToConfirm || typed.trim().toLowerCase() === req.typeToConfirm.toLowerCase();
+
   return (
     <Modal onClose={onClose}>
       <CardHeader>
         <CardTitle className="text-base">{req.title}</CardTitle>
         <CardDescription>{req.description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={() => {
-            req.onConfirm();
-            onClose();
-          }}
-        >
-          {req.confirmLabel}
-        </Button>
+      <CardContent className="space-y-4">
+        {req.typeToConfirm && (
+          <Field label={`Type “${req.typeToConfirm}” to confirm`}>
+            <Input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={req.typeToConfirm}
+              aria-label={`Type ${req.typeToConfirm} to confirm`}
+            />
+          </Field>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={!unlocked}
+            onClick={() => {
+              if (!unlocked) return;
+              req.onConfirm();
+              onClose();
+            }}
+          >
+            {req.confirmLabel}
+          </Button>
+        </div>
       </CardContent>
     </Modal>
   );
@@ -981,6 +1358,8 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
   const revealing = draft.status === 'REVEALING';
   const starting = draft.status === 'STARTING';
   const live = draft.status === 'ON_CLOCK' || draft.status === 'PICK_IN';
+  // The same rule the reducer applies, so the button can't offer a rejected action.
+  const endable = canEndDraft(draft.status);
   const onClockSlot = store.onClockTeamSlot();
   const round = draft.pointer >= 1 ? roundForOverall(draft.pointer, teams) : 0;
   const remaining = remainingMs(draft.pickDeadline, store.serverOffsetMs, now);
@@ -1051,15 +1430,12 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
   };
 
   // Back to Setup for the next draft: snapshot this draft's config as the form
-  // seed, tear the WS down so the old (finished) draft can't bleed in, drop the
-  // mirror + saved draftId, and keep the admin signed in. The old draft is
-  // untouched — still viewable/exportable at /export?draft=<oldId>.
+  // seed, leave the current draft, and keep the admin signed in. The old draft is
+  // untouched — still listed in the hub and exportable at /export?draft=<oldId>.
   const startNewDraft = () => {
-    const nextSeed = draftToSetupSeed(draft, league);
-    disconnect();
-    localStorage.removeItem('opendraft.draftId');
-    store.resetDraft();
-    onNewDraft(nextSeed);
+    // Seed first: navigating unmounts this component.
+    onNewDraft(draftToSetupSeed(draft, league));
+    navigate('/admin/new');
   };
 
   const confirmNewDraft = () =>
@@ -1068,6 +1444,23 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
       description: 'The finished draft stays saved and exportable; this returns you to setup.',
       confirmLabel: 'Start a new draft',
       onConfirm: startNewDraft,
+    });
+
+  // Ending is the irreversible one, so the dialog says exactly what survives.
+  const confirmEndDraft = () =>
+    setConfirm({
+      title: 'End this draft now?',
+      description: (
+        <>
+          The <strong>{draft.picks.length}</strong> pick{draft.picks.length === 1 ? '' : 's'}{' '}
+          already made are kept, and the draft becomes a finished, exportable record. The remaining{' '}
+          <strong>{Math.max(0, totalPicks - draft.picks.length)}</strong> will never be made, and
+          the draft cannot be restarted. This cannot be undone.
+        </>
+      ),
+      confirmLabel: 'End draft now',
+      typeToConfirm: 'end now',
+      onConfirm: () => store.adminAction('END_DRAFT'),
     });
 
   return (
@@ -1096,6 +1489,14 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
               <FilePlus2 className="h-4 w-4" /> Start a new draft
             </Button>
           )}
+          {endable && (
+            <Button variant="destructive" onClick={confirmEndDraft}>
+              <Square className="h-4 w-4" /> End draft now
+            </Button>
+          )}
+          <Button variant="outline" onClick={leaveDraft}>
+            <ChevronLeft className="h-4 w-4" /> Back
+          </Button>
         </div>
       </div>
 
@@ -1366,6 +1767,26 @@ function Controls({ onNewDraft }: { onNewDraft: (seed: SetupSeed) => void }) {
           )}
         </CardContent>
       </Card>
+
+      {endable && (
+        <Card className="border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-base text-destructive">End the draft early</CardTitle>
+            <CardDescription>
+              Stops the draft where it stands. The {draft.picks.length} pick
+              {draft.picks.length === 1 ? '' : 's'} already made are kept and stay exportable; the
+              remaining {Math.max(0, totalPicks - draft.picks.length)} are never made, and the draft
+              cannot be restarted. Use this when the room breaks up early — not to pause, which is
+              what the clock controls above are for.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="destructive" onClick={confirmEndDraft}>
+              <Square className="h-4 w-4" /> End draft now
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(null)} />}
     </div>

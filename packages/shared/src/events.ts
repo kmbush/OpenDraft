@@ -83,6 +83,18 @@ export interface ResumeEvent {
   type: 'RESUME';
 }
 
+/**
+ * Admin: stop the draft where it stands.
+ *
+ * For the night that ends before the roster does — the room breaks up, or a
+ * draft was started by mistake. The picks already made are kept and the draft
+ * becomes a finished, read-only, exportable record; it is `endedEarly` so nobody
+ * later reads a half-full board as a complete one.
+ */
+export interface EndDraftEvent {
+  type: 'END_DRAFT';
+}
+
 /** Admin: pop the last pick and rewind the pointer/version (repeatable). */
 export interface UndoEvent {
   type: 'UNDO';
@@ -159,6 +171,7 @@ export type DraftEvent =
   | SetOrderEvent
   | ReassignPickEvent
   | RemovePickEvent
-  | RewindToEvent;
+  | RewindToEvent
+  | EndDraftEvent;
 
 export type DraftEventType = DraftEvent['type'];

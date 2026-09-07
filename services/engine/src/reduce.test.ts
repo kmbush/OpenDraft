@@ -1,4 +1,9 @@
-import type { DraftState, Position, RosterFormat } from '@opendraft/shared';
+import {
+  type DraftState,
+  type Position,
+  type RosterFormat,
+  honorDeadline,
+} from '@opendraft/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { newDraft } from './draft.js';
 import { isValidOrder, slotForOverallPick } from './ordering.js';
@@ -46,6 +51,7 @@ describe('START', () => {
       draftId: 'D1',
       settings: makeSettings(),
       teams: makeTeams(4),
+      createdAt: 0,
     });
     const { state: next, outbox } = reduce(state, { type: 'START' }, { now: 1000 });
     expect(next).toBe(state); // unchanged
@@ -94,6 +100,7 @@ describe('START_REVEAL / REVEAL_DONE (The Reveal)', () => {
       draftId: 'D1',
       settings: makeSettings({ teams: 6 }),
       teams: makeTeams(6),
+      createdAt: 0,
     });
     const roll = () =>
       reduce(fromSetup, { type: 'START_REVEAL', game: 'envelopes' }, { now: 0, rng: seededRng(9) })
@@ -535,6 +542,7 @@ describe('order editing (pre-START only)', () => {
       draftId: 'D1',
       settings: makeSettings(),
       teams: makeTeams(4),
+      createdAt: 0,
     });
     const { state } = reduce(s, { type: 'SET_ORDER', order: [4, 3, 2, 1] }, { now: 0 });
     expect(state.status).toBe('ORDER_SET');
@@ -782,5 +790,82 @@ describe('snake vs linear across full rounds (on-clock sequence)', () => {
     }
     expect(seen).toEqual([1, 2, 3, 3, 2, 1, 1, 2, 3]);
     expect(s.status).toBe('COMPLETE');
+  });
+});
+
+describe('END_DRAFT', () => {
+  /** A live draft with two picks already on the board. */
+  function liveWithPicks(): DraftState {
+    let s = reduce(
+      setupDraft(makeSettings({ teams: 4, rounds: 3, mode: 'linear' })),
+      { type: 'START' },
+      CTX,
+    ).state;
+    s = place(s, CTX, 'p1', 'RB');
+    s = place(s, CTX, 'p2', 'WR');
+    return s;
+  }
+
+  it('finishes the draft where it stands, keeping every pick made', () => {
+    const before = liveWithPicks();
+    const { state: next, outbox } = reduce(before, { type: 'END_DRAFT' }, CTX);
+
+    expect(next.status).toBe('COMPLETE');
+    expect(next.endedEarly).toBe(true);
+    // The picks that were made stand; what's missing is simply missing.
+    expect(next.picks).toHaveLength(2);
+    expect(next.picks.map((p) => p.playerId)).toEqual(['p1', 'p2']);
+    expect(next.version).toBe(before.version + 1);
+    expect(outbox[0]?.type).toBe('SYNC');
+  });
+
+  it('leaves no timer behind — the scheduler is cancelled by the same transition', () => {
+    const { state } = reduce(liveWithPicks(), { type: 'END_DRAFT' }, CTX);
+    expect(state.pickDeadline).toBeUndefined();
+    expect(state.announceUntil).toBeUndefined();
+    expect(state.liveAt).toBeUndefined();
+    expect(state.pausedRemainingMs).toBeUndefined();
+    // `honorDeadline` returns nothing for COMPLETE, so the backstop is torn down
+    // without a second step that could be forgotten.
+    expect(honorDeadline(state)).toBeUndefined();
+  });
+
+  it('ends a paused draft too — pausing is not a way to be un-endable', () => {
+    const paused = reduce(liveWithPicks(), { type: 'PAUSE' }, CTX).state;
+    expect(paused.status).toBe('PAUSED');
+    expect(reduce(paused, { type: 'END_DRAFT' }, CTX).state.status).toBe('COMPLETE');
+  });
+
+  it('refuses a draft that never started — an empty COMPLETE record helps nobody', () => {
+    for (const start of [
+      newDraft({
+        leagueId: 'L1',
+        draftId: 'D1',
+        settings: makeSettings({ teams: 4, rounds: 2 }),
+        teams: makeTeams(4),
+        createdAt: 0,
+      }),
+      setupDraft(makeSettings({ teams: 4, rounds: 2 })),
+    ]) {
+      const { state, outbox } = reduce(start, { type: 'END_DRAFT' }, CTX);
+      expect(state.status, `from ${start.status}`).toBe(start.status);
+      expect(outbox[0]).toMatchObject({ type: 'REJECT', payload: { code: 'BAD_STATE' } });
+    }
+  });
+
+  it('refuses a draft that has already finished, rather than re-marking it', () => {
+    const ended = reduce(liveWithPicks(), { type: 'END_DRAFT' }, CTX).state;
+    const { state, outbox } = reduce(ended, { type: 'END_DRAFT' }, CTX);
+    expect(state).toBe(ended);
+    expect(outbox[0]).toMatchObject({ type: 'REJECT', payload: { code: 'BAD_STATE' } });
+  });
+
+  it('does not mark a draft that ran out of picks on its own', () => {
+    let s = reduce(setupDraft(makeSettings({ teams: 2, rounds: 1 })), { type: 'START' }, CTX).state;
+    s = place(s, CTX, 'a', 'RB');
+    s = place(s, CTX, 'b', 'WR');
+    expect(s.status).toBe('COMPLETE');
+    // A full draft and one cut short must not be indistinguishable afterwards.
+    expect(s.endedEarly).toBeUndefined();
   });
 });

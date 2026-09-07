@@ -135,16 +135,38 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 ## Admin console → session hub
 
-*(Items 2, 3, 5 cluster here — a single hub reframe rather than a single-draft-scoped console.)*
+*(The hub itself, historical browsing and early termination have shipped; read-only records and delete
+remain.)*
 
-- [ ] **Reframe admin as a hub** `feature` — less "the current draft," more a home: create a draft (today's
-  experience) **or** browse existing sessions. Umbrella for the items below.
-- [ ] **Browse historical drafts** `feature` — list all past drafts, click into any, view and **export** it.
-  Needs a new "list drafts for league" API route (currently only single-draft GET exists).
+- [x] **Reframe admin as a hub** `feature` — the console's home with no draft loaded is now the hub, not
+  the new-draft form. Creating a draft is one choice among several rather than the only door.
+- [x] **Browse historical drafts** `feature` — `GET /leagues/{id}/drafts` returns summaries (status, size,
+  progress, created), newest first, and the hub lists them with **Open** and **Export** per row. One Query
+  on the league partition, never a Scan; the `type` filter is applied after the read, so it pages.
+  This closed a real hole: a draft was always safe in DynamoDB, but its id lived **only** in the creating
+  browser's `localStorage` — a dead laptop left a perfectly intact draft unreachable through the UI.
+- [x] **Terminate an ongoing draft** `feature` — `END_DRAFT` finishes a draft where it stands: picks made
+  are kept, it becomes a `COMPLETE`, exportable record flagged `endedEarly` so a half-full board is never
+  mistaken for a finished one, and clearing the timed fields cancels the scheduler through the same
+  transition. `ENDABLE_STATUSES` lives in `shared` so the console can't offer a button the reducer rejects.
+  Plus **Leave** — close a draft on your screen without touching it; it keeps running for everyone else.
+- [x] **Name a draft** `feature` — an optional label set at creation and editable inline from the hub, so a
+  list of drafts reads as "2026 Redraft" rather than a column of dates. Unnamed drafts fall back to
+  `draftLabel` (date · teams×rounds) — never a bare UUID — so nothing needed a migration. The name also
+  prints on the export sheet.
+- [x] **Archive instead of delete** `feature` — the answer to "delete a historical draft". Archiving hides a
+  draft behind a *Show archived* toggle; nothing is ever removed. A delete button would hand back exactly
+  the risk the hub exists to remove, and PITR is a restore-to-a-new-table exercise, not an undo. Only a
+  `COMPLETE` draft can be archived — hiding a live one would hide the thing the operator needs to reach.
+  Rename and archive are **HTTP**, not engine events: the hub patches drafts it holds no socket to. They
+  also deliberately leave `version` alone, because bumping it over a label would fail a connected station's
+  next pick on its optimistic-concurrency check.
+- [ ] **Hard-delete a draft** `feature` — still unbuilt, and deliberately so. If it is ever wanted it needs a
+  `dynamodb:DeleteItem` grant the `http` role does not have, a batched delete of the header, teams and every
+  pick, and a guard refusing anything not `COMPLETE`. Archive covers the actual need (a tidy list).
 - [ ] **Completed drafts are read-only records** `feature` — once `COMPLETE`, a draft cannot be
-  restarted/reopened; it remains a viewable/exportable historical record only.
-- [ ] **Terminate / delete drafts** `feature` — terminate an **ongoing** draft (end it early) and delete a
-  **historical** draft. Guard both with clear confirmation (destructive, admin-passcode gated).
+  restarted/reopened; it remains a viewable/exportable historical record only. The hub now surfaces old
+  drafts for reopening, which makes this the next thing worth doing.
 
 ## In-person event delight
 

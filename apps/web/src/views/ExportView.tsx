@@ -111,11 +111,24 @@ export function ExportView() {
                 Final Draft Board
               </p>
               <h1 className="text-2xl font-black tracking-tight">{name}</h1>
+              {draft.name?.trim() && (
+                <p className="text-sm font-semibold text-muted-foreground">{draft.name.trim()}</p>
+              )}
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
             {settings.teams} teams · {settings.rounds} rounds · {settings.mode} ·{' '}
             {formatLabel(settings.rosterFormat)}
+            {/* A board with empty cells because the draft was stopped must not
+                read as one that simply ran its course. Prints with the sheet. */}
+            {draft.endedEarly && (
+              <>
+                <br />
+                <span className="font-semibold text-foreground">
+                  Ended early after {draft.picks.length} of {settings.teams * settings.rounds} picks
+                </span>
+              </>
+            )}
           </p>
         </header>
 

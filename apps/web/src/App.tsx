@@ -12,28 +12,12 @@ import { useEffect } from 'react';
 import { AppHeader } from './components/app-header.js';
 import { useLeague } from './hooks/useLeague.js';
 import { useTimerNudge } from './hooks/useTimerNudge.js';
+import { useRoute } from './lib/route.js';
 import { applyTheme } from './lib/theme.js';
 import { AdminView } from './views/AdminView.js';
 import { BoardView } from './views/BoardView.js';
 import { ExportView } from './views/ExportView.js';
 import { StationView } from './views/StationView.js';
-
-type Route = 'station' | 'board' | 'admin' | 'export';
-
-/**
- * Bare `/` lands on **admin**, not station. A station with no draft id has nothing
- * to render and used to hang on "Connecting…" forever, so the base URL — the thing
- * people actually paste and bookmark — was a dead end. Admin is the one view that
- * works from a cold start: it authenticates and can create or resume a draft.
- * Station stays reachable at its own path and via the admin's `?draft=` links.
- */
-function currentRoute(): Route {
-  const path = location.pathname;
-  if (path.startsWith('/board')) return 'board';
-  if (path.startsWith('/export')) return 'export';
-  if (path.startsWith('/station')) return 'station';
-  return 'admin';
-}
 
 export function App() {
   // Retint the app accent from the league theme once its metadata loads. Runs on
@@ -44,7 +28,7 @@ export function App() {
   // Any connected screen nudges timed transitions (AD-1); the server dedupes.
   useTimerNudge();
 
-  const route = currentRoute();
+  const route = useRoute();
   if (route === 'board') return <BoardView />;
   if (route === 'export') return <ExportView />;
   if (route === 'station') return <StationView />;

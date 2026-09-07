@@ -94,13 +94,15 @@ tools/dev-server/    Local no-AWS harness (reuses services/api core)
 infra/               Terraform (DynamoDB, API Gateways, Lambdas, S3/CloudFront, …)
 docs/DESIGN.md       Architecture & decisions
 docs/RUNNING-A-DRAFT.md  Commissioner's operator guide
+docs/RUNBOOK.md      Operator runbook — pool refresh, deploy, recovery
 CONVENTIONS.md       Coding standards
 ```
 
 ## Deploying to AWS
 
-Self-host on your own AWS account with Terraform. See [`infra/README.md`](infra/README.md) for the
-deployment runbook.
+Self-host on your own AWS account with Terraform. See [`infra/README.md`](infra/README.md) for standing
+the stack up the first time, and [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the recurring jobs afterwards —
+refreshing the player pool before a draft, shipping a change, and recovering a draft you can't reach.
 
 ### Deploying your own instance — what stays private
 

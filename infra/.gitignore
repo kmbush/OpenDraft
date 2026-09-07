@@ -5,7 +5,9 @@
 *.tfstate
 *.tfstate.*
 crash.log
-tfplan
+# Any saved plan, whatever it's called — a plan file can carry resolved variable
+# values, so it must never be committable by accident.
+tfplan*
 *.tfplan
 *.auto.tfvars
 override.tf

@@ -2,7 +2,8 @@
 
 A commissioner's end-to-end guide to running your league's draft. This covers how to **use** OpenDraft —
 setup, going live, the live draft, mid-draft fixes, and the recap. For architecture see
-[`DESIGN.md`](DESIGN.md); for deploying to AWS see [`../infra/README.md`](../infra/README.md); to run it
+[`DESIGN.md`](DESIGN.md); for deploying to AWS see [`../infra/README.md`](../infra/README.md) and the
+operator jobs in [`RUNBOOK.md`](RUNBOOK.md) (**refresh the pool before you create the draft**); to run it
 locally with no AWS see [`../tools/dev-server/README.md`](../tools/dev-server/README.md).
 
 ## The three screens
