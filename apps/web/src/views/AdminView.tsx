@@ -237,6 +237,16 @@ function DraftRow({
       })
     : 'Date not recorded';
 
+  // Always offered, never hidden. A control that disappears when it doesn't
+  // apply teaches nothing — it just reads as missing — so this stays put and
+  // says why it's unavailable instead.
+  const canArchive = archived || summary.status === 'COMPLETE';
+  const archiveHint = archived
+    ? 'Bring this draft back into the list'
+    : summary.status === 'COMPLETE'
+      ? 'Archive — hides it from this list. Nothing is deleted.'
+      : 'Only a finished draft can be archived. End it first.';
+
   const submitRename = async () => {
     setRenaming(false);
     const next = nameDraft.trim();
@@ -299,16 +309,27 @@ function DraftRow({
         >
           <FileDown className="h-4 w-4" /> Export <ExternalLink className="h-3.5 w-3.5" />
         </a>
-        {/* Only a finished draft can be put away — the server enforces this too. */}
-        {(archived || summary.status === 'COMPLETE') && (
+        {/* The title rides on a wrapper: a disabled button has pointer-events-none
+            and would never show a tooltip of its own — which is exactly when the
+            explanation matters most. */}
+        <span title={archiveHint}>
           <Button
             variant="ghost"
+            disabled={!canArchive}
+            aria-label={archiveHint}
             onClick={() => void onPatch(summary.draftId, { archived: !archived })}
-            title={archived ? 'Bring this draft back to the list' : 'Put this draft away'}
           >
-            {archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+            {archived ? (
+              <>
+                <ArchiveRestore className="h-4 w-4" /> Unarchive
+              </>
+            ) : (
+              <>
+                <Archive className="h-4 w-4" /> Archive
+              </>
+            )}
           </Button>
-        )}
+        </span>
         <Button variant="outline" onClick={() => openDraft(summary.draftId)}>
           Open
         </Button>
