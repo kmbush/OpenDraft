@@ -202,11 +202,28 @@ export interface DraftState {
    */
   poolSnapshotId?: string;
   /**
+   * What the commissioner calls this draft — "2026 Redraft", "Rookie draft".
+   *
+   * Metadata, not draft configuration: the engine never reads it, and renaming
+   * deliberately does not touch `version` (see `updateDraftMeta`), so a rename
+   * can't make a connected station's next pick look stale.
+   */
+  name?: string;
+  /**
    * Epoch ms the draft was created. Optional because drafts created before the
    * admin hub existed don't carry one; those sort last in the hub and show no
    * date, rather than being given a plausible-looking invented one.
    */
   createdAt?: number;
+  /**
+   * Epoch ms this draft was put away, if it has been.
+   *
+   * Archiving is what this product has instead of deleting. The whole premise of
+   * the hub is that a draft is never lost, and a delete button would hand back
+   * exactly the risk the hub exists to remove — so a tidy list is a filter, not a
+   * destruction. Nothing is ever removed, and unarchiving is one click.
+   */
+  archivedAt?: number;
   /**
    * Set when an admin ended the draft before every pick was made. The status is
    * still `COMPLETE` — a draft that stopped early is finished, read-only and
@@ -227,6 +244,7 @@ export interface DraftState {
  */
 export interface DraftSummary {
   draftId: string;
+  name?: string;
   status: DraftStatus;
   teams: number;
   rounds: number;
@@ -235,6 +253,8 @@ export interface DraftSummary {
   /** Epoch ms; absent on drafts predating `DraftState.createdAt`. */
   createdAt?: number;
   endedEarly?: boolean;
+  /** Set once archived — hidden from the hub's default view, never deleted. */
+  archivedAt?: number;
 }
 
 /**
@@ -276,13 +296,49 @@ export function canEndDraft(status: DraftStatus): boolean {
 export function summarizeDraft(state: Omit<DraftState, 'teams' | 'picks'>): DraftSummary {
   return {
     draftId: state.draftId,
+    name: state.name,
     status: state.status,
     teams: state.settings.teams,
     rounds: state.settings.rounds,
     picksMade: Math.max(0, state.pointer - 1),
     createdAt: state.createdAt,
     endedEarly: state.endedEarly,
+    archivedAt: state.archivedAt,
   };
+}
+
+/**
+ * The metadata an admin can change from the hub, without opening the draft.
+ *
+ * Deliberately not engine events: you archive and rename from a list, where there
+ * is no WebSocket connection to that draft to send one over. `null` clears.
+ */
+export interface DraftMetaPatch {
+  name?: string | null;
+  archived?: boolean;
+}
+
+/** Longest draft name we'll store. Long enough to be descriptive, short enough to render. */
+export const DRAFT_NAME_MAX = 60;
+
+/**
+ * What to call a draft that has no name — never a bare UUID.
+ *
+ * The hub existed before names did, so most drafts will hit this for a while;
+ * it has to read as a real label, not a placeholder.
+ */
+export function draftLabel(summary: {
+  name?: string;
+  teams: number;
+  rounds: number;
+  createdAt?: number;
+}): string {
+  const named = summary.name?.trim();
+  if (named) return named;
+  const when = summary.createdAt
+    ? new Date(summary.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })
+    : 'Undated';
+  return `${when} · ${summary.teams}×${summary.rounds}`;
 }
 
 /** Newest first. Drafts with no `createdAt` predate it and sort to the bottom. */

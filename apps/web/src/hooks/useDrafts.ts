@@ -11,8 +11,8 @@
  * draft is created or ends, and the hub is exactly where you look after one of
  * those happened.
  */
-import type { DraftSummary } from '@opendraft/shared';
-import { useQuery } from '@tanstack/react-query';
+import type { DraftMetaPatch, DraftSummary } from '@opendraft/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LEAGUE_ID, api } from '../net.js';
 import { useLiveStore } from '../store/store.js';
 
@@ -21,6 +21,10 @@ export interface DraftsQuery {
   loading: boolean;
   error: Error | null;
   refetch: () => void;
+  /** Rename or archive a draft, then refresh the list. */
+  patch: (draftId: string, patch: DraftMetaPatch) => Promise<void>;
+  /** The last patch that failed, so the hub can say so instead of silently not changing. */
+  patchError: Error | null;
 }
 
 export function useDrafts(): DraftsQuery {
@@ -37,6 +41,15 @@ export function useDrafts(): DraftsQuery {
     retry: false,
   });
 
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: ({ draftId, patch }: { draftId: string; patch: DraftMetaPatch }) =>
+      api.patch<{ ok: true }>(`/leagues/${LEAGUE_ID}/drafts/${draftId}`, patch, token ?? ''),
+    // Refetch rather than patching the cache by hand: the server decides what a
+    // patch actually did (an empty name clears it, archiving is refused mid-draft).
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['drafts', LEAGUE_ID] }),
+  });
+
   return {
     drafts: query.data?.drafts ?? [],
     // `isLoading` is false for a disabled query, which would render "no drafts"
@@ -44,5 +57,9 @@ export function useDrafts(): DraftsQuery {
     loading: query.isLoading || (Boolean(token) && !query.data && !query.error),
     error: query.error,
     refetch: () => void query.refetch(),
+    patch: async (draftId, patch) => {
+      await mutation.mutateAsync({ draftId, patch }).catch(() => undefined);
+    },
+    patchError: mutation.error,
   };
 }

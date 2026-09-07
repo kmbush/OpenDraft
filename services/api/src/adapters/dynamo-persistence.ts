@@ -20,6 +20,7 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
+  type DraftMetaPatch,
   type DraftState,
   type DraftSummary,
   type LeagueMeta,
@@ -157,6 +158,70 @@ export class DynamoPersistence implements Persistence {
     } while (startKey);
 
     return summaries.sort(byNewest);
+  }
+
+  /**
+   * Patch a draft's label / shelf position on the DRAFT item alone.
+   *
+   * A targeted `UpdateItem` rather than a read-modify-write through `commit`:
+   * only the named attributes move, `version` is untouched by design (see the
+   * port), and there is no pick log to diff. Guarded on the item existing, so a
+   * patch against a deleted or mistyped id reports false instead of springing a
+   * half-formed DRAFT item into being.
+   */
+  async updateDraftMeta(
+    leagueId: string,
+    draftId: string,
+    patch: DraftMetaPatch,
+  ): Promise<boolean> {
+    const sets: string[] = [];
+    const removes: string[] = [];
+    const names: Record<string, string> = {};
+    const values: Record<string, unknown> = {};
+
+    if (patch.name !== undefined) {
+      if (patch.name === null) {
+        removes.push('#name');
+      } else {
+        sets.push('#name = :name');
+        values[':name'] = patch.name;
+      }
+      names['#name'] = 'name';
+    }
+    if (patch.archived !== undefined) {
+      if (patch.archived) {
+        sets.push('#archivedAt = :archivedAt');
+        values[':archivedAt'] = Date.now();
+      } else {
+        removes.push('#archivedAt');
+      }
+      names['#archivedAt'] = 'archivedAt';
+    }
+    if (!sets.length && !removes.length) return true;
+
+    const expression = [
+      sets.length ? `SET ${sets.join(', ')}` : '',
+      removes.length ? `REMOVE ${removes.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    try {
+      await this.doc.send(
+        new UpdateCommand({
+          TableName: this.tableName,
+          Key: { PK: pk(leagueId), SK: draftSk(draftId) },
+          UpdateExpression: expression,
+          ConditionExpression: 'attribute_exists(SK)',
+          ExpressionAttributeNames: names,
+          ...(Object.keys(values).length ? { ExpressionAttributeValues: values } : {}),
+        }),
+      );
+      return true;
+    } catch (err) {
+      if ((err as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+      throw err;
+    }
   }
 
   async commit(leagueId: string, prev: DraftState, next: DraftState): Promise<CommitResult> {

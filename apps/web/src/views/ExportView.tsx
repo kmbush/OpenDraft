@@ -111,6 +111,9 @@ export function ExportView() {
                 Final Draft Board
               </p>
               <h1 className="text-2xl font-black tracking-tight">{name}</h1>
+              {draft.name?.trim() && (
+                <p className="text-sm font-semibold text-muted-foreground">{draft.name.trim()}</p>
+              )}
             </div>
           </div>
           <p className="text-sm text-muted-foreground">

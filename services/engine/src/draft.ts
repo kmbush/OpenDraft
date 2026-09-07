@@ -12,6 +12,8 @@ export interface NewDraftParams {
   teams: Team[];
   /** Epoch ms, passed in because the engine is pure and owns no clock. */
   createdAt: number;
+  /** Optional label. Metadata the engine never reads — see `DraftState.name`. */
+  name?: string;
 }
 
 /** A fresh draft in SETUP: no order, no picks, version 0. */
@@ -26,6 +28,7 @@ export function newDraft(params: NewDraftParams): DraftState {
     pointer: 0,
     status: 'SETUP',
     createdAt: params.createdAt,
+    ...(params.name ? { name: params.name } : {}),
     version: 0,
   };
 }

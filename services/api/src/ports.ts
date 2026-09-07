@@ -4,6 +4,7 @@
  * pipeline unit-testable with in-memory fakes and zero AWS (CONVENTIONS §4.3, §6).
  */
 import type {
+  DraftMetaPatch,
   DraftState,
   DraftSummary,
   LeagueMeta,
@@ -44,6 +45,18 @@ export interface Persistence {
    * admin hub must not pull a pick log per row.
    */
   listDrafts(leagueId: string): Promise<DraftSummary[]>;
+  /**
+   * Set a draft's name / archived flag, without going through `commit`.
+   *
+   * Two deliberate omissions. It does **not** bump `version`: a rename is not a
+   * move in the draft, and bumping would make a connected station's next pick
+   * fail its optimistic-concurrency check for the sake of a label. And it takes
+   * no `prev`, because the hub patches drafts it has never loaded — a summary
+   * row is all the caller has.
+   *
+   * Resolves `false` if there is no such draft.
+   */
+  updateDraftMeta(leagueId: string, draftId: string, patch: DraftMetaPatch): Promise<boolean>;
 
   putConnection(record: ConnectionRecord): Promise<void>;
   deleteConnection(leagueId: string, connectionId: string): Promise<void>;

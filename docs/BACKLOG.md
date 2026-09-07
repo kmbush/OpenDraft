@@ -150,9 +150,20 @@ remain.)*
   mistaken for a finished one, and clearing the timed fields cancels the scheduler through the same
   transition. `ENDABLE_STATUSES` lives in `shared` so the console can't offer a button the reducer rejects.
   Plus **Leave** — close a draft on your screen without touching it; it keeps running for everyone else.
-- [ ] **Delete a historical draft** `feature` — the other half of the terminate/delete pair. Destructive and
-  unrecoverable, so it needs more thought than a confirm dialog: probably a soft-delete/archive flag rather
-  than a real delete, given the whole point of the hub is that nothing is ever lost.
+- [x] **Name a draft** `feature` — an optional label set at creation and editable inline from the hub, so a
+  list of drafts reads as "2026 Redraft" rather than a column of dates. Unnamed drafts fall back to
+  `draftLabel` (date · teams×rounds) — never a bare UUID — so nothing needed a migration. The name also
+  prints on the export sheet.
+- [x] **Archive instead of delete** `feature` — the answer to "delete a historical draft". Archiving hides a
+  draft behind a *Show archived* toggle; nothing is ever removed. A delete button would hand back exactly
+  the risk the hub exists to remove, and PITR is a restore-to-a-new-table exercise, not an undo. Only a
+  `COMPLETE` draft can be archived — hiding a live one would hide the thing the operator needs to reach.
+  Rename and archive are **HTTP**, not engine events: the hub patches drafts it holds no socket to. They
+  also deliberately leave `version` alone, because bumping it over a label would fail a connected station's
+  next pick on its optimistic-concurrency check.
+- [ ] **Hard-delete a draft** `feature` — still unbuilt, and deliberately so. If it is ever wanted it needs a
+  `dynamodb:DeleteItem` grant the `http` role does not have, a batched delete of the header, teams and every
+  pick, and a guard refusing anything not `COMPLETE`. Archive covers the actual need (a tidy list).
 - [ ] **Completed drafts are read-only records** `feature` — once `COMPLETE`, a draft cannot be
   restarted/reopened; it remains a viewable/exportable historical record only. The hub now surfaces old
   drafts for reopening, which makes this the next thing worth doing.

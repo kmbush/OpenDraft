@@ -227,6 +227,118 @@ describe('draft setup CRUD', () => {
     expect(bad.status).toBe(401);
   });
 
+  it('names a draft at creation and carries it into the list', async () => {
+    const { deps } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    await handleHttp(
+      deps,
+      req('POST', '/leagues/L1/drafts', {
+        token,
+        body: { settings: minimalSettings(), name: '  2026 Redraft  ' },
+      }),
+    );
+    const res = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token }));
+    expect((res.body as { drafts: Array<{ name?: string }> }).drafts[0]?.name).toBe('2026 Redraft');
+  });
+
+  it('renames a draft without disturbing its version', async () => {
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    persistence.seed(liveDraft());
+    const before = (persistence.drafts.get('L1#D1') as DraftState).version;
+
+    const res = await handleHttp(
+      deps,
+      req('PATCH', '/leagues/L1/drafts/D1', { token, body: { name: 'Friday night' } }),
+    );
+    expect(res.status).toBe(200);
+
+    const after = persistence.drafts.get('L1#D1') as DraftState;
+    expect(after.name).toBe('Friday night');
+    // A label is not a move in the draft. Bumping the version here would fail a
+    // connected station's next pick on its optimistic-concurrency check.
+    expect(after.version).toBe(before);
+  });
+
+  it('treats an empty name as clearing the name', async () => {
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    persistence.seed({ ...liveDraft(), name: 'Old name' });
+
+    await handleHttp(deps, req('PATCH', '/leagues/L1/drafts/D1', { token, body: { name: '   ' } }));
+    expect((persistence.drafts.get('L1#D1') as DraftState).name).toBeUndefined();
+  });
+
+  it('refuses to archive a draft that is still running', async () => {
+    // Archiving hides a draft from the hub's default view. Doing that to a live
+    // draft would hide the one thing the operator needs to reach.
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    persistence.seed(liveDraft()); // ON_CLOCK
+
+    const res = await handleHttp(
+      deps,
+      req('PATCH', '/leagues/L1/drafts/D1', { token, body: { archived: true } }),
+    );
+    expect(res.status).toBe(409);
+    expect((persistence.drafts.get('L1#D1') as DraftState).archivedAt).toBeUndefined();
+  });
+
+  it('archives a finished draft and brings it back again', async () => {
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    persistence.seed({ ...liveDraft(), status: 'COMPLETE' });
+
+    await handleHttp(
+      deps,
+      req('PATCH', '/leagues/L1/drafts/D1', { token, body: { archived: true } }),
+    );
+    const archived = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token }));
+    const row = (archived.body as { drafts: Array<{ archivedAt?: number }> }).drafts[0];
+    expect(row?.archivedAt).toBeGreaterThan(0);
+    // Archiving hides; it never deletes. The draft is still listed and loadable.
+    expect(await deps.persistence.loadDraft('L1', 'D1')).not.toBeNull();
+
+    await handleHttp(
+      deps,
+      req('PATCH', '/leagues/L1/drafts/D1', { token, body: { archived: false } }),
+    );
+    const back = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token }));
+    expect(
+      (back.body as { drafts: Array<{ archivedAt?: number }> }).drafts[0]?.archivedAt,
+    ).toBeUndefined();
+  });
+
+  it('guards the patch route: admin only, real drafts, sane input', async () => {
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    persistence.seed(liveDraft());
+
+    expect(
+      (await handleHttp(deps, req('PATCH', '/leagues/L1/drafts/D1', { body: { name: 'x' } })))
+        .status,
+    ).toBe(401);
+    expect(
+      (
+        await handleHttp(
+          deps,
+          req('PATCH', '/leagues/L1/drafts/NOPE', { token, body: { name: 'x' } }),
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (await handleHttp(deps, req('PATCH', '/leagues/L1/drafts/D1', { token, body: {} }))).status,
+    ).toBe(400);
+    expect(
+      (
+        await handleHttp(
+          deps,
+          req('PATCH', '/leagues/L1/drafts/D1', { token, body: { name: 'x'.repeat(61) } }),
+        )
+      ).status,
+    ).toBe(400);
+  });
+
   it('404s an unknown route/draft', async () => {
     const { deps } = harness({ hash: HASH });
     expect((await handleHttp(deps, req('GET', '/leagues/L1/drafts/nope'))).status).toBe(404);

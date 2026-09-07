@@ -6,7 +6,15 @@
  */
 import { reduce } from '@opendraft/engine';
 import { newDraft } from '@opendraft/engine';
-import type { DraftSettings, DraftState, LeagueMeta, Team, Theme } from '@opendraft/shared';
+import {
+  DRAFT_NAME_MAX,
+  type DraftMetaPatch,
+  type DraftSettings,
+  type DraftState,
+  type LeagueMeta,
+  type Team,
+  type Theme,
+} from '@opendraft/shared';
 import type { Deps } from '../ports.js';
 import { verifySession } from './auth.js';
 
@@ -95,6 +103,10 @@ export async function handleHttp(deps: Deps, req: HttpRequest): Promise<HttpResp
         const state = await deps.persistence.loadDraft(leagueId, draftId);
         return state ? json(200, state) : err(404, 'NOT_FOUND', 'No such draft');
       }
+      // PATCH /leagues/{id}/drafts/{draftId} — rename / archive.
+      if (segments.length === 4 && req.method === 'PATCH') {
+        return patchDraftMeta(deps, req, leagueId, draftId);
+      }
       // PUT /leagues/{id}/drafts/{draftId}/order
       if (segments.length === 5 && segments[4] === 'order' && req.method === 'PUT') {
         return setOrder(deps, req, leagueId, draftId);
@@ -173,12 +185,17 @@ async function createDraft(deps: Deps, req: HttpRequest, leagueId: string): Prom
   const teams = buildTeams(body.teams, settings.teams);
   if (!teams) return err(400, 'BAD_REQUEST', 'teams must match settings.teams');
 
+  const rawName = typeof body.name === 'string' ? body.name.trim() : '';
+  if (rawName.length > DRAFT_NAME_MAX) {
+    return err(400, 'BAD_REQUEST', `name must be ${DRAFT_NAME_MAX} characters or fewer`);
+  }
   const state = newDraft({
     leagueId,
     draftId: deps.env.newId(),
     settings,
     teams,
     createdAt: deps.env.now(),
+    ...(rawName ? { name: rawName } : {}),
   });
   const withPool: DraftState =
     typeof body.poolSnapshotId === 'string'
@@ -216,6 +233,66 @@ async function setOrder(
     return json(409, { ok: false, code: 'STALE_VERSION', currentVersion: commit.currentVersion });
   }
   return json(200, next);
+}
+
+/**
+ * Rename or archive a draft.
+ *
+ * Metadata only, and metadata is the reason this is HTTP rather than an engine
+ * event: the hub patches drafts it is not connected to, so there is no socket to
+ * send one over. `version` is deliberately left alone — a rename is not a move in
+ * the draft, and bumping it would fail a connected station's next pick over a
+ * label.
+ */
+async function patchDraftMeta(
+  deps: Deps,
+  req: HttpRequest,
+  leagueId: string,
+  draftId: string,
+): Promise<HttpResponse> {
+  if (!(await requireAdmin(deps, req))) return err(401, 'UNAUTHORIZED', 'Admin session required');
+  const body = parseBody(req);
+  if (!body) return err(400, 'BAD_REQUEST', 'invalid body');
+
+  const patch: DraftMetaPatch = {};
+
+  if (body.name !== undefined) {
+    if (body.name === null) {
+      patch.name = null;
+    } else if (typeof body.name !== 'string') {
+      return err(400, 'BAD_REQUEST', 'name must be a string or null');
+    } else {
+      const trimmed = body.name.trim();
+      if (trimmed.length > DRAFT_NAME_MAX) {
+        return err(400, 'BAD_REQUEST', `name must be ${DRAFT_NAME_MAX} characters or fewer`);
+      }
+      // An empty name is a cleared name, not a draft called "".
+      patch.name = trimmed || null;
+    }
+  }
+
+  if (body.archived !== undefined) {
+    if (typeof body.archived !== 'boolean') {
+      return err(400, 'BAD_REQUEST', 'archived must be a boolean');
+    }
+    // Archiving hides a draft from the hub's default view. Doing that to a draft
+    // that is still running would hide the one thing the operator needs to reach.
+    if (body.archived) {
+      const state = await deps.persistence.loadDraft(leagueId, draftId);
+      if (!state) return err(404, 'NOT_FOUND', 'No such draft');
+      if (state.status !== 'COMPLETE') {
+        return err(409, 'BAD_STATE', 'Only a finished draft can be archived. End it first.');
+      }
+    }
+    patch.archived = body.archived;
+  }
+
+  if (patch.name === undefined && patch.archived === undefined) {
+    return err(400, 'BAD_REQUEST', 'nothing to change');
+  }
+
+  const ok = await deps.persistence.updateDraftMeta(leagueId, draftId, patch);
+  return ok ? json(200, { ok: true }) : err(404, 'NOT_FOUND', 'No such draft');
 }
 
 async function poolPointer(deps: Deps, leagueId: string, draftId: string): Promise<HttpResponse> {

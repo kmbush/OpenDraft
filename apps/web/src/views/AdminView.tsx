@@ -7,6 +7,8 @@
  */
 import { roundForOverall } from '@opendraft/engine';
 import {
+  DRAFT_NAME_MAX,
+  type DraftMetaPatch,
   type DraftSettings,
   type DraftStatus,
   type DraftSummary,
@@ -16,9 +18,12 @@ import {
   type Position,
   type RevealGame,
   canEndDraft,
+  draftLabel,
 } from '@opendraft/shared';
 import {
   AlertCircle,
+  Archive,
+  ArchiveRestore,
   CheckCircle2,
   ChevronLeft,
   Clapperboard,
@@ -34,6 +39,7 @@ import {
   MonitorPlay,
   Palette,
   Pause,
+  Pencil,
   Play,
   Plus,
   Rocket,
@@ -212,9 +218,18 @@ const STATUS_LABEL: Record<DraftStatus, string> = {
 /** Live states earn the accent; everything else is quiet. */
 const LIVE_STATUSES: readonly DraftStatus[] = ['ON_CLOCK', 'PICK_IN', 'STARTING', 'REVEALING'];
 
-function DraftRow({ summary }: { summary: DraftSummary }) {
+function DraftRow({
+  summary,
+  onPatch,
+}: {
+  summary: DraftSummary;
+  onPatch: (draftId: string, patch: DraftMetaPatch) => Promise<void>;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(summary.name ?? '');
   const total = summary.teams * summary.rounds;
   const live = LIVE_STATUSES.includes(summary.status);
+  const archived = Boolean(summary.archivedAt);
   const when = summary.createdAt
     ? new Date(summary.createdAt).toLocaleString(undefined, {
         dateStyle: 'medium',
@@ -222,19 +237,58 @@ function DraftRow({ summary }: { summary: DraftSummary }) {
       })
     : 'Date not recorded';
 
+  const submitRename = async () => {
+    setRenaming(false);
+    const next = nameDraft.trim();
+    if (next === (summary.name ?? '')) return;
+    await onPatch(summary.draftId, { name: next || null });
+  };
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
-      <div className="min-w-0 space-y-1">
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3',
+        archived && 'opacity-60',
+      )}
+    >
+      <div className="min-w-0 flex-1 space-y-1">
+        {renaming ? (
+          <Input
+            autoFocus
+            maxLength={DRAFT_NAME_MAX}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={submitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void submitRename();
+              if (e.key === 'Escape') {
+                setNameDraft(summary.name ?? '');
+                setRenaming(false);
+              }
+            }}
+            placeholder="Name this draft"
+            aria-label="Draft name"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRenaming(true)}
+            className="flex max-w-full items-center gap-1.5 truncate text-left font-semibold hover:text-accent"
+            title="Rename this draft"
+          >
+            <span className="truncate">{draftLabel(summary)}</span>
+            <Pencil className="h-3 w-3 shrink-0 opacity-40" />
+          </button>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={live ? 'default' : 'secondary'}>{STATUS_LABEL[summary.status]}</Badge>
           {summary.endedEarly && <Badge variant="outline">Ended early</Badge>}
-          <span className="text-sm font-medium">
-            {summary.teams} teams · {summary.rounds} rounds
+          {archived && <Badge variant="outline">Archived</Badge>}
+          <span className="text-xs text-muted-foreground">
+            {summary.teams} teams · {summary.rounds} rounds · {when} · {summary.picksMade} of{' '}
+            {total} picks
           </span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {when} · {summary.picksMade} of {total} picks
-        </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
         <a
@@ -245,6 +299,16 @@ function DraftRow({ summary }: { summary: DraftSummary }) {
         >
           <FileDown className="h-4 w-4" /> Export <ExternalLink className="h-3.5 w-3.5" />
         </a>
+        {/* Only a finished draft can be put away — the server enforces this too. */}
+        {(archived || summary.status === 'COMPLETE') && (
+          <Button
+            variant="ghost"
+            onClick={() => void onPatch(summary.draftId, { archived: !archived })}
+            title={archived ? 'Bring this draft back to the list' : 'Put this draft away'}
+          >
+            {archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+          </Button>
+        )}
         <Button variant="outline" onClick={() => openDraft(summary.draftId)}>
           Open
         </Button>
@@ -262,8 +326,12 @@ function DraftRow({ summary }: { summary: DraftSummary }) {
  * choice among several.
  */
 function Hub() {
-  const { drafts, loading, error, refetch } = useDrafts();
+  const { drafts, loading, error, patchError, refetch, patch } = useDrafts();
   const league = useLeague();
+  const [showArchived, setShowArchived] = useState(false);
+
+  const archivedCount = drafts.filter((d) => d.archivedAt).length;
+  const visible = showArchived ? drafts : drafts.filter((d) => !d.archivedAt);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -284,12 +352,20 @@ function Hub() {
           <div>
             <CardTitle className="text-base">Drafts</CardTitle>
             <CardDescription>
-              Every draft this league has run. Nothing is ever deleted.
+              Every draft this league has run. Archiving only hides a draft — nothing here is ever
+              deleted. Click a name to rename it.
             </CardDescription>
           </div>
-          <Button variant="ghost" onClick={refetch} aria-label="Refresh the draft list">
-            <RotateCcw className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {archivedCount > 0 && (
+              <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
+                {showArchived ? 'Hide' : 'Show'} archived ({archivedCount})
+              </Button>
+            )}
+            <Button variant="ghost" onClick={refetch} aria-label="Refresh the draft list">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {loading && (
@@ -308,6 +384,22 @@ function Hub() {
             </Alert>
           )}
 
+          {patchError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex-1">
+                <AlertTitle>That change didn't stick</AlertTitle>
+                <AlertDescription>{patchError.message}</AlertDescription>
+              </div>
+            </Alert>
+          )}
+
+          {!loading && !error && visible.length === 0 && drafts.length > 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Every draft is archived. Use “Show archived” to see them.
+            </p>
+          )}
+
           {!loading && !error && drafts.length === 0 && (
             <div className="py-8 text-center">
               <History className="mx-auto h-8 w-8 text-muted-foreground/40" />
@@ -318,8 +410,8 @@ function Hub() {
             </div>
           )}
 
-          {drafts.map((d) => (
-            <DraftRow key={d.draftId} summary={d} />
+          {visible.map((d) => (
+            <DraftRow key={d.draftId} summary={d} onPatch={patch} />
           ))}
         </CardContent>
       </Card>
@@ -635,6 +727,9 @@ function Setup({ seed, onCancel }: { seed: SetupSeed; onCancel: () => void }) {
   const store = useLiveStore();
   const [name, setName] = useState(seed.name);
   const [teams, setTeams] = useState(seed.teams);
+  // Not carried over from a previous draft's seed: last year's name on this
+  // year's draft is worse than no name at all.
+  const [draftName, setDraftName] = useState('');
   const [teamRows, setTeamRows] = useState<TeamConfig[]>(seed.teamRows);
   const [rounds, setRounds] = useState(seed.rounds);
   const [mode, setMode] = useState<'snake' | 'linear'>(seed.mode);
@@ -733,7 +828,12 @@ function Setup({ seed, onCancel }: { seed: SetupSeed; onCancel: () => void }) {
       const id = poolSnapshotId.trim();
       const created = await api.post<{ draftId: string }>(
         `/leagues/${LEAGUE_ID}/drafts`,
-        { settings, teams: teamsPayload, ...(id ? { poolSnapshotId: id } : {}) },
+        {
+          settings,
+          teams: teamsPayload,
+          ...(draftName.trim() ? { name: draftName.trim() } : {}),
+          ...(id ? { poolSnapshotId: id } : {}),
+        },
         token,
       );
       // Leave the form for the draft it just made — the URL move connects it.
@@ -769,6 +869,14 @@ function Setup({ seed, onCancel }: { seed: SetupSeed; onCancel: () => void }) {
         <CardContent className="space-y-4">
           <Field label="League name">
             <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Draft name (optional)">
+            <Input
+              value={draftName}
+              maxLength={DRAFT_NAME_MAX}
+              onChange={(e) => setDraftName(e.target.value)}
+              placeholder="2026 Redraft — what you'll look for in the hub later"
+            />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Teams">

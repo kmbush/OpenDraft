@@ -3,6 +3,7 @@
  * AWS (CONVENTIONS §6). Not a test file.
  */
 import {
+  type DraftMetaPatch,
   type DraftState,
   type DraftSummary,
   type LeagueMeta,
@@ -43,6 +44,27 @@ export class FakePersistence implements Persistence {
       .filter((d) => d.leagueId === leagueId)
       .map(summarizeDraft)
       .sort(byNewest);
+  }
+
+  async updateDraftMeta(
+    leagueId: string,
+    draftId: string,
+    patch: DraftMetaPatch,
+  ): Promise<boolean> {
+    const key = this.draftKey(leagueId, draftId);
+    const current = this.drafts.get(key);
+    if (!current) return false;
+    const next = { ...current };
+    if (patch.name !== undefined) {
+      if (patch.name === null) next.name = undefined;
+      else next.name = patch.name;
+    }
+    if (patch.archived !== undefined) {
+      next.archivedAt = patch.archived ? Date.now() : undefined;
+    }
+    // Version untouched on purpose — see the port.
+    this.drafts.set(key, next);
+    return true;
   }
 
   async loadDraft(leagueId: string, draftId: string): Promise<DraftState | null> {
