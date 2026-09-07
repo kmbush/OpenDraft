@@ -96,9 +96,17 @@ describe('boardRow / boardWidth', () => {
     expect(boardRow('The Unstoppables', 8)).toBe('THE UNST');
   });
 
+  it('fits a name that the old 18-tile ceiling used to clip', () => {
+    const names = ['Sharks', 'The Unstoppable Juggernauts'];
+    const cols = boardWidth(names);
+    expect(cols).toBe(27);
+    // The whole point: the name arrives intact rather than sliced to fit.
+    expect(boardRow(names[1] as string, cols)).toBe('THE UNSTOPPABLE JUGGERNAUTS');
+  });
+
   it('sizes the board to the longest name, within bounds', () => {
     expect(boardWidth(['AB', 'ABCDEFGHIJKL'])).toBe(12);
     expect(boardWidth(['AB'])).toBe(10); // floor
-    expect(boardWidth(['A'.repeat(40)])).toBe(18); // ceiling
+    expect(boardWidth(['A'.repeat(40)])).toBe(28); // ceiling
   });
 });

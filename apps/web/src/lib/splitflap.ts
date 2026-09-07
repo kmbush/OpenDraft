@@ -61,10 +61,18 @@ export function boardRow(text: string, cols: number): string {
 }
 
 /**
- * Width of the flap board: the longest name, clamped. Fixed for the whole show so
- * rows stay in a column and the board reads as one machine.
+ * Width of the flap board, in tiles: enough for the longest name in the league.
+ *
+ * Fixed for the whole show so every row is the same length and the board reads as
+ * one machine rather than a ragged stack. The old ceiling of 18 quietly *clipped*
+ * longer names — `boardRow` slices to fit — which is the one thing a board with a
+ * team's name on it must not do.
+ *
+ * A ceiling still exists, because tiles shrink to keep a wide board on screen and
+ * past some width they stop being readable from a couch. It sits far enough out
+ * that a real team name reaches it only by trying to.
  */
-export function boardWidth(names: string[], min = 10, max = 18): number {
+export function boardWidth(names: string[], min = 10, max = 28): number {
   const longest = names.reduce((n, s) => Math.max(n, s.length), 0);
   return Math.min(max, Math.max(min, longest));
 }
