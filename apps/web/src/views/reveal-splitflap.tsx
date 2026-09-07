@@ -50,14 +50,24 @@ function Flap({
   const squash = locked ? 1 : 0.82 + 0.18 * phase;
   const glyph = char === ' ' ? '\u00A0' : char;
 
+  // Every dimension is a ratio of `--flap`, so the card keeps its proportions at
+  // any width. The ratios are exactly the old fixed sizes divided by the old
+  // 3.1vh tile, which is why a board narrow enough not to need shrinking renders
+  // pixel-for-pixel as it did before.
+  const width = big ? 'calc(var(--flap) * 1.935)' : 'var(--flap)';
+  const height = big ? 'calc(var(--flap) * 2.903)' : 'calc(var(--flap) * 1.484)';
+  const fontSize = big ? 'calc(var(--flap) * 1.613)' : 'calc(var(--flap) * 0.839)';
+
   return (
     <span
       className={cn(
         'relative inline-block overflow-hidden rounded-[3px] font-black tabular-nums leading-none',
-        big ? 'h-[9vh] w-[6vh] text-[5vh]' : 'h-[4.6vh] w-[3.1vh] text-[2.6vh]',
         !locked && 'text-white/85',
       )}
       style={{
+        width,
+        height,
+        fontSize,
         transform: `scaleY(${squash})`,
         background: face ?? '#15161a',
         color: ink,
@@ -168,8 +178,23 @@ export function SplitFlapReveal({
         </p>
       </div>
 
-      {/* The board proper — a dark machine face the flaps are set into. */}
-      <div className="flex flex-col items-center gap-[1vh] rounded-2xl border border-white/10 bg-black/50 px-[3vh] py-[2vh] shadow-2xl">
+      {/*
+        The board proper — a dark machine face the flaps are set into.
+
+        `--flap` is the tile width every card sizes itself from. It holds the
+        original 3.1vh until the row would run off the screen, then shrinks to
+        whatever does fit: a league with long names gets smaller tiles rather than
+        a board wider than the television. The widest row is the big one, so it
+        sets the divisor; the subtraction is the pick label's column.
+      */}
+      <div
+        className="flex flex-col items-center gap-[1vh] rounded-2xl border border-white/10 bg-black/50 px-[3vh] py-[2vh] shadow-2xl"
+        style={
+          {
+            '--flap': `min(3.1vh, calc((92vw - 14vh) / (${cols} * 2.1)))`,
+          } as React.CSSProperties
+        }
+      >
         {/* #1 rides at the top, tumbling alone once every other row has stopped. */}
         <FlapRow
           big
