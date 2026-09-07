@@ -13,17 +13,17 @@ export const GLYPHS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-'&";
 /** How long one flap card takes to swap. Fast enough to blur, slow enough to read. */
 export const FLAP_MS = 55;
 
-/** How long a row spends settling, left to right, before it locks. */
-export const SETTLE_MS = 700;
-
 /**
- * When the flap at `col` locks, given the row's lock time. Columns settle
- * left-to-right across `SETTLE_MS` so the last character lands exactly on the
- * row's beat — the row reads as one gesture rather than a ragged stop.
+ * How fast one column's drum turns.
+ *
+ * Every flap in a row now stops on the same beat, which is what a rack of them
+ * driven off one shaft actually does. Left alone they would also *turn* in
+ * lockstep, and two columns landing on the same letter would show the same glyph
+ * the whole way down — a row of twins. Varying the rate a few percent per column
+ * keeps the drums independent while still arriving exactly on the row's beat.
  */
-export function flapLockAtMs(rowLockAtMs: number, col: number, cols: number): number {
-  const span = SETTLE_MS / Math.max(1, cols);
-  return rowLockAtMs - SETTLE_MS + (col + 1) * span;
+export function flapMs(col: number): number {
+  return FLAP_MS * (1 + ((col * 7) % 5) * 0.06);
 }
 
 /**
@@ -31,20 +31,13 @@ export function flapLockAtMs(rowLockAtMs: number, col: number, cols: number): nu
  *
  * A real board's drum only turns one way and **arrives** at its letter — it never
  * jumps there. So this counts backwards from the target: with `n` flaps left
- * before lock, the drum shows the glyph `n` places before the answer. Rows stay
- * decorrelated for free, because each column locks at its own moment on its own
- * letter.
+ * before lock, the drum shows the glyph `n` places before the answer. Columns
+ * stay decorrelated because each turns at its own rate (`flapMs`), not because
+ * each stops at its own moment — they all stop together.
  */
-export function flapGlyph(
-  finalChar: string,
-  elapsed: number,
-  rowLockAtMs: number,
-  col: number,
-  cols: number,
-): string {
-  const lockAt = flapLockAtMs(rowLockAtMs, col, cols);
+export function flapGlyph(finalChar: string, elapsed: number, lockAt: number, col: number): string {
   if (elapsed >= lockAt) return finalChar;
-  const stepsLeft = Math.ceil((lockAt - elapsed) / FLAP_MS);
+  const stepsLeft = Math.ceil((lockAt - elapsed) / flapMs(col));
   const target = Math.max(0, GLYPHS.indexOf(finalChar));
   const idx = (((target - stepsLeft) % GLYPHS.length) + GLYPHS.length) % GLYPHS.length;
   return GLYPHS[idx] ?? ' ';
@@ -55,11 +48,11 @@ export function flapGlyph(
  * the motion is mechanical rather than a bare character swap; only meaningful
  * while the flap is still turning.
  */
-export function flapPhase(elapsed: number, rowLockAtMs: number, col: number, cols: number): number {
-  const lockAt = flapLockAtMs(rowLockAtMs, col, cols);
+export function flapPhase(elapsed: number, lockAt: number, col: number): number {
   if (elapsed >= lockAt) return 1;
-  const intoStep = (lockAt - elapsed) % FLAP_MS;
-  return 1 - intoStep / FLAP_MS;
+  const step = flapMs(col);
+  const intoStep = (lockAt - elapsed) % step;
+  return 1 - intoStep / step;
 }
 
 /** Uppercase, clipped to the board's fixed width, padded so every row is one length. */

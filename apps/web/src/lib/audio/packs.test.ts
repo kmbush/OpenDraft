@@ -1,7 +1,35 @@
 import { REVEAL_PER_PICK_MS } from '@opendraft/shared';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PACK_ID, SOUND_EVENTS, SOUND_PACKS, packById } from './packs.js';
+import {
+  DEFAULT_PACK_ID,
+  REVEAL_FLUTTER_MS,
+  SOUND_EVENTS,
+  SOUND_PACKS,
+  packById,
+} from './packs.js';
 import { type Layer, soundDurationMs } from './synth.js';
+
+/**
+ * Loudest instant in a sound. Summing every layer would be wrong — a drum roll's
+ * hits are delayed and never peak together. What matters is what overlaps, so
+ * sample the timeline and take the worst moment.
+ */
+const peakConcurrentGain = (layers: readonly Layer[]): number => {
+  const end = Math.max(
+    ...layers.map((l) => (l.delayMs ?? 0) + l.attackMs + (l.holdMs ?? 0) + l.decayMs),
+  );
+  let worst = 0;
+  for (let t = 0; t <= end; t += 5) {
+    let sum = 0;
+    for (const l of layers) {
+      const start = l.delayMs ?? 0;
+      const stop = start + l.attackMs + (l.holdMs ?? 0) + l.decayMs;
+      if (t >= start && t <= stop) sum += l.gain;
+    }
+    worst = Math.max(worst, sum);
+  }
+  return worst;
+};
 
 describe('sound packs', () => {
   it('every pack covers every event — a missing cue is silence nobody notices', () => {
@@ -45,6 +73,7 @@ describe('sound packs', () => {
     const cadenceMs: Partial<Record<(typeof SOUND_EVENTS)[number], number>> = {
       'timer-tick': 1000, // once a second through the urgent band
       'reveal-beat': REVEAL_PER_PICK_MS, // one per reveal beat
+      'reveal-flutter': REVEAL_FLUTTER_MS, // continuous while a show is turning
     };
     for (const pack of SOUND_PACKS) {
       for (const [event, cadence] of Object.entries(cadenceMs)) {
@@ -60,27 +89,17 @@ describe('sound packs', () => {
     }
   });
 
-  it('keeps concurrent gain in range, so a pack cannot clip the master', () => {
-    // Summing every layer would be wrong: a drum roll's hits are delayed and
-    // never peak together. What can clip is what overlaps, so sample the
-    // timeline and take the worst instant.
-    const peakConcurrentGain = (layers: readonly Layer[]): number => {
-      const end = Math.max(
-        ...layers.map((l) => (l.delayMs ?? 0) + l.attackMs + (l.holdMs ?? 0) + l.decayMs),
-      );
-      let worst = 0;
-      for (let t = 0; t <= end; t += 5) {
-        let sum = 0;
-        for (const l of layers) {
-          const start = l.delayMs ?? 0;
-          const stop = start + l.attackMs + (l.holdMs ?? 0) + l.decayMs;
-          if (t >= start && t <= stop) sum += l.gain;
-        }
-        worst = Math.max(worst, sum);
-      }
-      return worst;
-    };
+  it('keeps the flutter under the beat that interrupts it', () => {
+    // The whole point of splitting the two: a row locking only reads as a lock
+    // against the clatter it stops. Level them out and the show turns to mush.
+    for (const pack of SOUND_PACKS) {
+      const flutter = peakConcurrentGain(pack.sounds['reveal-flutter'].layers);
+      const beat = peakConcurrentGain(pack.sounds['reveal-beat'].layers);
+      expect(flutter, `${pack.id} flutter vs beat`).toBeLessThan(beat * 0.6);
+    }
+  });
 
+  it('keeps concurrent gain in range, so a pack cannot clip the master', () => {
     for (const pack of SOUND_PACKS) {
       for (const event of SOUND_EVENTS) {
         const peak = peakConcurrentGain(pack.sounds[event].layers);

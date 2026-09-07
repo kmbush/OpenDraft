@@ -27,6 +27,13 @@ export const SOUND_EVENTS = [
   'auto-pick',
   /** The whole draft is over. */
   'draft-complete',
+  /**
+   * The machine still running between beats — a rack of flaps mid-turn. This
+   * repeats every `REVEAL_FLUTTER_MS` for as long as anything is still moving,
+   * so it has to be tiny, and it has to sit well under the beat that interrupts
+   * it: the lock is only audible as a lock against this.
+   */
+  'reveal-flutter',
   /** One beat of a reveal show — a flap locking, a puck landing. */
   'reveal-beat',
   /** First overall. */
@@ -34,6 +41,13 @@ export const SOUND_EVENTS = [
 ] as const;
 
 export type SoundEvent = (typeof SOUND_EVENTS)[number];
+
+/**
+ * How often `reveal-flutter` repeats while a show is still turning. Near the
+ * split-flap's own 55ms drum step — fast enough to read as a rack of flaps
+ * rather than a metronome, and the ceiling on how long that cue may last.
+ */
+export const REVEAL_FLUTTER_MS = 70;
 
 export interface SoundPack {
   id: string;
@@ -138,6 +152,54 @@ const crowd = (gain: number, attackMs: number, decayMs: number, delayMs = 0): So
   },
 ];
 
+/**
+ * Rising flourish — the sound of an announcement landing, not a klaxon going
+ * off. Three notes up into a held top interval, so it resolves rather than just
+ * stopping. `wave` is what separates a broadcast brass desk from an arena organ
+ * playing the same figure.
+ */
+const fanfare = (gain: number, wave: OscillatorType = 'sawtooth', root = -8): Sound['layers'] => [
+  {
+    wave,
+    freq: note(root),
+    gain,
+    attackMs: 10,
+    holdMs: 80,
+    decayMs: 200,
+    filter: { type: 'lowpass', freq: 3200 },
+  },
+  {
+    wave,
+    freq: note(root + 5),
+    gain,
+    attackMs: 10,
+    holdMs: 80,
+    decayMs: 220,
+    delayMs: 150,
+    filter: { type: 'lowpass', freq: 3200 },
+  },
+  {
+    wave,
+    freq: note(root + 12),
+    gain: gain * 1.15,
+    attackMs: 12,
+    holdMs: 520,
+    decayMs: 700,
+    delayMs: 300,
+    filter: { type: 'lowpass', freq: 3600 },
+  },
+  {
+    wave,
+    freq: note(root + 16),
+    gain: gain * 0.7,
+    attackMs: 14,
+    holdMs: 500,
+    decayMs: 700,
+    delayMs: 310,
+    filter: { type: 'lowpass', freq: 3600 },
+  },
+];
+
 /** Kick drum: a pitch drop is the whole trick. */
 const kick = (gain: number, delayMs = 0): Sound['layers'] => [
   { wave: 'sine', freq: 155, freqEnd: 45, gain, attackMs: 2, decayMs: 160, delayMs },
@@ -223,21 +285,39 @@ const GAMEDAY: SoundPack = {
         ...kick(0.4),
       ],
     },
-    // Split-flap clack / puck knock: a hard transient with a woody body.
+    // One flap mid-turn — the dry tick under the clatter, never the lock. Loud
+    // enough to be a machine running in a full room, not a hint of one.
+    'reveal-flutter': {
+      layers: [
+        {
+          wave: 'noise',
+          gain: 0.2,
+          attackMs: 1,
+          decayMs: 34,
+          filter: { type: 'bandpass', freq: 2400, q: 3.2 },
+        },
+        { wave: 'triangle', freq: 340, freqEnd: 190, gain: 0.1, attackMs: 1, decayMs: 30 },
+      ],
+    },
+    // A row locking: the whole rack stopping at once. Deliberately far bigger
+    // than the flutter it interrupts — that contrast is what a lock sounds like.
     'reveal-beat': {
       layers: [
         {
           wave: 'noise',
-          gain: 0.3,
+          gain: 0.34,
           attackMs: 1,
-          decayMs: 52,
-          filter: { type: 'bandpass', freq: 1900, q: 2.2 },
+          decayMs: 78,
+          filter: { type: 'bandpass', freq: 1700, q: 1.8 },
         },
-        { wave: 'triangle', freq: 190, freqEnd: 92, gain: 0.17, attackMs: 1, decayMs: 66 },
+        { wave: 'triangle', freq: 210, freqEnd: 84, gain: 0.22, attackMs: 1, decayMs: 150 },
+        ...kick(0.26),
       ],
     },
+    // The order is set. A celebration, not an air horn: the fanfare goes up and
+    // the room goes up with it.
     'reveal-finale': {
-      layers: [...airHorn(0.22, 520), ...crowd(0.18, 200, 1100, 80), ...kick(0.42)],
+      layers: [...fanfare(0.15), ...crowd(0.2, 300, 1800, 240), ...kick(0.38), ...kick(0.26, 300)],
     },
   },
 };
@@ -296,20 +376,39 @@ const ARENA: SoundPack = {
         ...crowd(0.2, 320, 1400, 100),
       ],
     },
-    'reveal-beat': {
+    'reveal-flutter': {
       layers: [
-        ...kick(0.34),
         {
           wave: 'noise',
-          gain: 0.14,
+          gain: 0.19,
           attackMs: 1,
-          decayMs: 58,
-          filter: { type: 'bandpass', freq: 800, q: 1.4 },
+          decayMs: 30,
+          filter: { type: 'bandpass', freq: 1500, q: 2.6 },
         },
+        { wave: 'triangle', freq: 260, freqEnd: 150, gain: 0.08, attackMs: 1, decayMs: 28 },
       ],
     },
+    'reveal-beat': {
+      layers: [
+        ...kick(0.4),
+        {
+          wave: 'noise',
+          gain: 0.26,
+          attackMs: 1,
+          decayMs: 90,
+          filter: { type: 'bandpass', freq: 900, q: 1.4 },
+        },
+        { wave: 'square', freq: 128, freqEnd: 64, gain: 0.12, attackMs: 2, decayMs: 120 },
+      ],
+    },
+    // The organ takes the flourish and the building answers it.
     'reveal-finale': {
-      layers: [...airHorn(0.24, 640), ...crowd(0.22, 240, 1300, 60), ...kick(0.42)],
+      layers: [
+        ...fanfare(0.13, 'square', -5),
+        ...crowd(0.24, 340, 2000, 260),
+        ...kick(0.4),
+        ...kick(0.28, 320),
+      ],
     },
   },
 };
@@ -349,14 +448,38 @@ const SIDELINE: SoundPack = {
         ...crowd(0.16, 240, 1100, 300),
       ],
     },
-    'reveal-beat': { layers: snare(0.2) },
+    // Rim tick under the roll; the lock is the full drum behind it.
+    'reveal-flutter': {
+      layers: [
+        {
+          wave: 'noise',
+          gain: 0.2,
+          attackMs: 1,
+          decayMs: 26,
+          filter: { type: 'bandpass', freq: 2800, q: 6 },
+        },
+        { wave: 'triangle', freq: 620, freqEnd: 430, gain: 0.09, attackMs: 1, decayMs: 28 },
+      ],
+    },
+    'reveal-beat': { layers: [...snare(0.3), ...kick(0.3)] },
+    // A roll building into a crash — the drumline's version of a celebration.
+    // No whistle: a whistle stops play, and this is the opposite of that.
     'reveal-finale': {
       layers: [
-        ...kick(0.44),
-        ...snare(0.22, 110),
-        ...snare(0.22, 210),
-        ...whistle(0.2, 320).map((l) => ({ ...l, delayMs: 320 })),
-        ...crowd(0.18, 220, 1200, 260),
+        ...snare(0.16),
+        ...snare(0.16, 90),
+        ...snare(0.18, 170),
+        ...snare(0.2, 240),
+        ...kick(0.4, 310),
+        {
+          wave: 'noise',
+          gain: 0.26,
+          attackMs: 3,
+          decayMs: 1600,
+          delayMs: 310,
+          filter: { type: 'highpass', freq: 3200 },
+        },
+        ...crowd(0.22, 320, 1900, 300),
       ],
     },
   },

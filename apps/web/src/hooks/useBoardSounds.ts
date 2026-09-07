@@ -94,6 +94,30 @@ export function useClockSounds(
 }
 
 /**
+ * Fire a cue over and over while `active` — the clatter of a rack still turning,
+ * as against the single beat of one row stopping.
+ *
+ * The level stays put for as long as the machine is running. A rack of flaps
+ * doesn't get quieter as it empties: it clatters at one volume and then stops.
+ */
+export function useRepeatCue(
+  active: boolean,
+  event: SoundEvent,
+  play: (event: SoundEvent, velocity?: number) => void,
+  intervalMs: number,
+): void {
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      // Real flaps are never quite in unison, and identical hits read as a
+      // machine gun. This is texture on a fixed level, not a fade.
+      play(event, 0.92 + Math.random() * 0.16);
+    }, intervalMs);
+    return () => clearInterval(id);
+  }, [active, event, play, intervalMs]);
+}
+
+/**
  * Fire a cue each time a counter advances — one flap locking, one puck landing.
  *
  * Reveal shows re-render every frame, so this guards on the value rather than the

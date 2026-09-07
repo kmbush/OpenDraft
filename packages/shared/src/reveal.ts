@@ -9,8 +9,14 @@
 /** Fixed pre-show countdown ("THE REVEAL BEGINS IN 0:30…"). Not configurable. */
 export const REVEAL_COUNTDOWN_MS = 30_000;
 
-/** Beat after the show opens before the first envelope flips. */
-export const REVEAL_LEAD_IN_MS = 1_500;
+/**
+ * Wind-up after the show opens, before the first slot resolves.
+ *
+ * Long enough that the machine is unmistakably *running* — a rack of flaps
+ * clattering, a puck in play — before anything locks. A short lead-in reads as a
+ * page still finishing its load rather than a show starting.
+ */
+export const REVEAL_LEAD_IN_MS = 4_500;
 /** Time each non-finale envelope holds the stage (revealed last pick → #2). */
 export const REVEAL_PER_PICK_MS = 1_500;
 /** The #1-overall finale — longer, for the flourish. */

@@ -13,11 +13,12 @@
 import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
 import { ListOrdered } from 'lucide-react';
 import { Confetti } from '../components/confetti.js';
-import { useStepCue } from '../hooks/useBoardSounds.js';
+import { useRepeatCue, useStepCue } from '../hooks/useBoardSounds.js';
 import { useRafNow } from '../hooks/useRafNow.js';
+import { REVEAL_FLUTTER_MS } from '../lib/audio/packs.js';
 import { estimatedServerNow } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
-import { boardRow, boardWidth, flapGlyph, flapLockAtMs, flapPhase } from '../lib/splitflap.js';
+import { boardRow, boardWidth, flapGlyph, flapPhase } from '../lib/splitflap.js';
 import { readableOn } from '../lib/teams.js';
 import { RevealCountdown, type RevealGameProps } from './reveal.js';
 
@@ -114,9 +115,9 @@ function FlapRow({
             key={`${row}-${col}`}
             big={big}
             color={color}
-            locked={elapsed >= flapLockAtMs(lockAt, col, cols)}
-            phase={flapPhase(elapsed, lockAt, col, cols)}
-            char={flapGlyph(ch, elapsed, lockAt, col, cols)}
+            locked={elapsed >= lockAt}
+            phase={flapPhase(elapsed, lockAt, col)}
+            char={flapGlyph(ch, elapsed, lockAt, col)}
           />
         ))}
       </div>
@@ -147,7 +148,11 @@ export function SplitFlapReveal({
   const outro = elapsed >= finaleAt + REVEAL_FINALE_MS;
   const locked = draft.order.filter((_, i) => elapsed >= pickRevealAtMs(i + 1, teams)).length;
 
-  // The clack. Each row locking is a beat.
+  // Two sounds, on purpose. The flutter is the rack still turning; the beat is a
+  // whole row stopping dead on the same instant. A lock is only audible as a lock
+  // against the clatter it interrupts, so the clatter holds its level until the
+  // last row lands and the board goes quiet all at once.
+  useRepeatCue(elapsed >= 0 && locked < teams, 'reveal-flutter', play, REVEAL_FLUTTER_MS);
   useStepCue(locked, 'reveal-beat', play);
   useStepCue(finaleOpen ? 1 : 0, 'reveal-finale', play);
 
