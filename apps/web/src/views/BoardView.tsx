@@ -14,19 +14,32 @@
  */
 import { roundForOverall, slotForOverallPick } from '@opendraft/engine';
 import type { DraftState, Pick } from '@opendraft/shared';
-import { FileDown, Maximize, Minimize, Radio, Trophy, WifiOff, Zap } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  FileDown,
+  Maximize,
+  Minimize,
+  Radio,
+  Trophy,
+  Volume2,
+  VolumeX,
+  WifiOff,
+  Zap,
+} from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrandMark } from '../components/brand-mark.js';
 import { Confetti } from '../components/confetti.js';
 import { ConnectionNotice } from '../components/connection-notice.js';
 import { PositionBadge } from '../components/position-badge.js';
+import { useBoardSounds, useClockSounds } from '../hooks/useBoardSounds.js';
 import { useConnectionPhase } from '../hooks/useConnectionPhase.js';
 import { useCountdownSweep } from '../hooks/useCountdownSweep.js';
 import { useDeadlineClock } from '../hooks/useDeadlineClock.js';
 import { type Fullscreen, useFullscreen, useIdle } from '../hooks/useFullscreen.js';
 import { indexPlayers, playerName, usePool } from '../hooks/usePool.js';
 import { useRowCapacity } from '../hooks/useRowCapacity.js';
+import { type Soundboard, useSoundboard } from '../hooks/useSoundboard.js';
 import { useTicker } from '../hooks/useTicker.js';
+import { SOUND_PACKS } from '../lib/audio/packs.js';
 import { clockFraction, formatClock, remainingMs } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
 import { teamColor } from '../lib/teams.js';
@@ -105,11 +118,13 @@ function CountdownRing({
   serverOffsetMs,
   timerMs,
   accent,
+  play,
 }: {
   deadline: number | undefined;
   serverOffsetMs: number;
   timerMs: number;
   accent: string;
+  play: Soundboard['play'];
 }) {
   // The clock ticks here and nowhere above. Every level this sits below is a
   // subtree that would otherwise re-render on a timer for the whole length of a
@@ -120,6 +135,7 @@ function CountdownRing({
   // second late by a varying amount, which on a board-sized clock reads as lag
   // even while the ring beside it is delivering every frame.
   const remaining = useDeadlineClock(deadline, serverOffsetMs);
+  useClockSounds(remaining, deadline !== undefined, play);
   const urgent = remaining <= 10_000;
   const warning = remaining <= 30_000 && !urgent;
   const color = urgent ? '#ef4444' : warning ? '#f59e0b' : accent;
@@ -205,6 +221,82 @@ function FullscreenButton({ fs, hidden }: { fs: Fullscreen; hidden: boolean }) {
   );
 }
 
+/**
+ * Sound on/off, with the pack picker behind it.
+ *
+ * Like fullscreen, this control has to exist rather than being a preference
+ * somewhere else: a browser will not start audio without a gesture, so the click
+ * that turns sound on *is* what makes it possible. It fades with the cursor once
+ * the room settles.
+ */
+function SoundButton({ sound, hidden }: { sound: Soundboard; hidden: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (!sound.supported) return null;
+  const Icon = sound.enabled ? Volume2 : VolumeX;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={sound.toggle}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setOpen((v) => !v);
+        }}
+        title={sound.enabled ? 'Mute (right-click for packs)' : 'Turn sound on'}
+        aria-label={sound.enabled ? 'Mute board sound' : 'Turn board sound on'}
+        aria-pressed={sound.enabled}
+        className={cn(
+          'rounded-lg border border-white/10 bg-white/5 p-2 transition-opacity duration-500',
+          'hover:bg-white/15 hover:text-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40',
+          sound.enabled ? 'text-white/80' : 'text-white/40',
+          hidden && !open ? 'opacity-0' : 'opacity-100',
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 z-40 mt-2 w-60 rounded-lg border border-white/10 bg-slate-900/95 p-3 text-left shadow-2xl backdrop-blur">
+          <p className="mb-2 font-semibold text-[0.7rem] text-white/40 uppercase tracking-[0.2em]">
+            Sound pack
+          </p>
+          <div className="flex flex-col gap-1">
+            {SOUND_PACKS.map((pack) => (
+              <button
+                key={pack.id}
+                type="button"
+                onClick={() => sound.setPack(pack.id)}
+                className={cn(
+                  'rounded px-2 py-1.5 text-sm transition-colors',
+                  sound.packId === pack.id
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/60 hover:bg-white/10',
+                )}
+              >
+                <span className="block font-semibold">{pack.label}</span>
+                <span className="block text-white/40 text-xs">{pack.blurb}</span>
+              </button>
+            ))}
+          </div>
+          <label className="mt-3 block text-[0.7rem] text-white/40 uppercase tracking-[0.2em]">
+            Volume
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={sound.volume}
+              onChange={(e) => sound.setVolume(Number.parseFloat(e.target.value))}
+              className="mt-1 w-full accent-amber-400"
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopStrip({
   round,
   rounds,
@@ -213,6 +305,7 @@ function TopStrip({
   status,
   connected,
   fs,
+  sound,
   controlHidden,
 }: {
   round: number;
@@ -222,7 +315,8 @@ function TopStrip({
   status: string;
   connected: boolean;
   fs: Fullscreen;
-  /** Fades the control once the room settles, without moving anything else. */
+  sound: Soundboard;
+  /** Fades the controls once the room settles, without moving anything else. */
   controlHidden: boolean;
 }) {
   return (
@@ -260,6 +354,7 @@ function TopStrip({
             <WifiOff className="h-4 w-4" /> Offline
           </span>
         )}
+        <SoundButton sound={sound} hidden={controlHidden} />
         <FullscreenButton fs={fs} hidden={controlHidden} />
       </div>
     </header>
@@ -287,6 +382,7 @@ function ClockHero({
   deadline,
   serverOffsetMs,
   timerMs,
+  play,
 }: {
   teamName: string;
   accent: string;
@@ -295,6 +391,7 @@ function ClockHero({
   deadline: number | undefined;
   serverOffsetMs: number;
   timerMs: number;
+  play: Soundboard['play'];
 }) {
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center gap-6 overflow-hidden px-8">
@@ -324,6 +421,7 @@ function ClockHero({
           serverOffsetMs={serverOffsetMs}
           timerMs={timerMs}
           accent={accent}
+          play={play}
         />
       </div>
     </div>
@@ -774,6 +872,9 @@ export function BoardView() {
   const rootRef = useRef<HTMLDivElement>(null);
   const fs = useFullscreen(useCallback(() => rootRef.current, []));
   const idle = useIdle();
+  const sound = useSoundboard();
+  // Above the early return below: this has to run on every render, draft or not.
+  useBoardSounds(state.draft, state.onClockTeamSlot(), sound.play);
 
   // `F` toggles fullscreen. The board has no text inputs, so a bare letter is safe,
   // and it gives a host with a remote or a stray keyboard a way in without aiming
@@ -905,6 +1006,7 @@ export function BoardView() {
         status={draft.status}
         connected={connected}
         fs={fs}
+        sound={sound}
         controlHidden={fs.active && idle}
       />
 
@@ -917,6 +1019,7 @@ export function BoardView() {
           serverOffsetMs={serverOffsetMs}
           teamName={teamName}
           colorOf={colorOf}
+          play={sound.play}
         />
       ) : phase === 'starting' ? (
         <StartingHero
@@ -954,6 +1057,7 @@ export function BoardView() {
               deadline={draft.pickDeadline}
               serverOffsetMs={serverOffsetMs}
               timerMs={timerMs}
+              play={sound.play}
             />
             <OnDeck items={onDeck} teamName={teamName} colorOf={colorOf} />
           </div>

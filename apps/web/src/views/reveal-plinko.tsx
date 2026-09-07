@@ -13,6 +13,7 @@ import { REVEAL_FINALE_MS, pickRevealAtMs } from '@opendraft/shared';
 import { CircleDot } from 'lucide-react';
 import { Fragment } from 'react';
 import { Confetti } from '../components/confetti.js';
+import { useStepCue } from '../hooks/useBoardSounds.js';
 import { useRafNow } from '../hooks/useRafNow.js';
 import { estimatedServerNow } from '../lib/clock.js';
 import { cn } from '../lib/cn.js';
@@ -63,15 +64,28 @@ function PegField({ cols, strike }: { cols: number; strike: { row: number; x: nu
   );
 }
 
-export function PlinkoReveal({ draft, now, serverOffsetMs, teamName, colorOf }: RevealGameProps) {
+export function PlinkoReveal({
+  draft,
+  now,
+  serverOffsetMs,
+  teamName,
+  colorOf,
+  play,
+}: RevealGameProps) {
   // A puck sampled on the board's 250ms ticker teleports between positions; a
   // falling object needs frames.
   const rafNow = useRafNow();
   const reveal = draft.reveal;
-  if (!reveal) return null;
-
   const teams = draft.order.length;
-  const elapsed = estimatedServerNow(rafNow || now, serverOffsetMs) - reveal.revealAt;
+  // Computed above the early returns below, because the cues are hooks.
+  const elapsed = reveal ? estimatedServerNow(rafNow || now, serverOffsetMs) - reveal.revealAt : -1;
+  const landedCount = draft.order.filter((_, i) => elapsed >= pickRevealAtMs(i + 1, teams)).length;
+
+  // The peg knock lands with the puck.
+  useStepCue(landedCount, 'reveal-beat', play);
+  useStepCue(elapsed >= pickRevealAtMs(1, teams) ? 1 : 0, 'reveal-finale', play);
+
+  if (!reveal) return null;
   if (elapsed < 0) return <RevealCountdown remaining={-elapsed} />;
 
   const cols = Math.max(2, teams);
