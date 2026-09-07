@@ -22,7 +22,7 @@ variable "cors_allow_origins" {
 variable "cors_allow_methods" {
   description = "HTTP methods allowed by CORS preflight. Covers the routes the web app actually uses."
   type        = list(string)
-  default     = ["GET", "POST", "PUT", "OPTIONS"]
+  default     = ["GET", "POST", "PUT", "PATCH", "OPTIONS"]
 }
 
 variable "cors_allow_headers" {
