@@ -1,6 +1,8 @@
+import { reduce } from '@opendraft/engine';
+import type { DraftState } from '@opendraft/shared';
 import bcrypt from 'bcryptjs';
 import { describe, expect, it } from 'vitest';
-import { harness } from '../test-helpers.js';
+import { harness, liveDraft } from '../test-helpers.js';
 import { type HttpRequest, handleHttp } from './http.js';
 
 const HASH = bcrypt.hashSync('letmein', 8);
@@ -154,6 +156,75 @@ describe('draft setup CRUD', () => {
       }),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("lists the league's drafts newest first, without dragging pick logs along", async () => {
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+
+    for (let i = 0; i < 3; i++) {
+      // Distinct creation instants, so "newest first" is actually testable.
+      deps.env.now = () => 1_000 + i * 1_000;
+      await handleHttp(
+        deps,
+        req('POST', '/leagues/L1/drafts', { token, body: { settings: minimalSettings() } }),
+      );
+    }
+    // A draft in a different league must not leak into this league's list.
+    persistence.seed({ ...liveDraft(), leagueId: 'OTHER', draftId: 'X1' });
+
+    const res = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token }));
+    expect(res.status).toBe(200);
+    const { drafts } = res.body as { drafts: Array<Record<string, unknown>> };
+
+    expect(drafts).toHaveLength(3);
+    expect(drafts.map((d) => d.createdAt)).toEqual([3_000, 2_000, 1_000]);
+    expect(drafts[0]).toMatchObject({ status: 'SETUP', teams: 2, rounds: 2, picksMade: 0 });
+    // A summary is a summary: no pick log, no team roster.
+    expect(drafts[0]).not.toHaveProperty('picks');
+    expect(drafts[0]).not.toHaveProperty('teams.0');
+  });
+
+  it('reports how far a draft got, so the hub can show progress', async () => {
+    const { deps, persistence } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    persistence.seed(liveDraft()); // ON_CLOCK, no picks yet
+
+    const before = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token }));
+    expect((before.body as { drafts: Array<{ picksMade: number }> }).drafts[0]?.picksMade).toBe(0);
+
+    const played = reduce(
+      persistence.drafts.get('L1#D1') as DraftState,
+      { type: 'SUBMIT_PICK', teamSlot: 1, playerId: 'p1', position: 'RB' },
+      { now: 1 },
+    ).state;
+    persistence.seed(played);
+
+    const after = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token }));
+    expect((after.body as { drafts: Array<{ picksMade: number }> }).drafts[0]?.picksMade).toBe(1);
+  });
+
+  it('returns an empty list for a league that has never drafted', async () => {
+    const { deps } = harness({ hash: HASH });
+    const token = await adminToken(deps);
+    const res = await handleHttp(deps, req('GET', '/leagues/NOPE/drafts', { token }));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ drafts: [] });
+  });
+
+  it('refuses to list drafts without an admin session', async () => {
+    // A draft id IS the capability to view or pick in that draft — there is no
+    // player auth by design. An open list would publish every id to anyone who
+    // loads the site, turning unguessable links into public ones.
+    const { deps, persistence } = harness({ hash: HASH });
+    persistence.seed(liveDraft());
+
+    const anon = await handleHttp(deps, req('GET', '/leagues/L1/drafts'));
+    expect(anon.status).toBe(401);
+    expect(anon.body).not.toHaveProperty('drafts');
+
+    const bad = await handleHttp(deps, req('GET', '/leagues/L1/drafts', { token: 'nonsense' }));
+    expect(bad.status).toBe(401);
   });
 
   it('404s an unknown route/draft', async () => {

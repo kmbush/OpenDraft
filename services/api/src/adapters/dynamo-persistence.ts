@@ -19,7 +19,15 @@ import {
   type TransactWriteCommandInput,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { DraftState, LeagueMeta, Pick, Team } from '@opendraft/shared';
+import {
+  type DraftState,
+  type DraftSummary,
+  type LeagueMeta,
+  type Pick,
+  type Team,
+  byNewest,
+  summarizeDraft,
+} from '@opendraft/shared';
 import type { CommitResult, ConnectionRecord, ConnectionRole, Persistence } from '../ports.js';
 import { authSk, connSk, draftPrefix, draftSk, metaSk, pickSk, pk, teamSk } from './keys.js';
 
@@ -113,6 +121,42 @@ export class DynamoPersistence implements Persistence {
       .sort((a, b) => a.overall - b.overall);
 
     return { ...(stripKeys(draftItem) as Omit<DraftState, 'teams' | 'picks'>), teams, picks };
+  }
+
+  /**
+   * Every draft in the league, newest first.
+   *
+   * One Query on the league partition — never a Scan (§7). The `type` filter is
+   * applied by DynamoDB *after* the read, so this pays to read the pick and team
+   * items it then discards, and a page can come back empty while more pages
+   * remain: hence the pagination loop, which is not optional here even though
+   * the result set is small. At single-league scale (a handful of drafts of a
+   * few hundred tiny items) that read cost is fractions of a cent; if a league
+   * ever accumulates enough history for it to matter, the fix is a dedicated
+   * `DRAFTS#` index item written at create time, not a Scan.
+   */
+  async listDrafts(leagueId: string): Promise<DraftSummary[]> {
+    const summaries: DraftSummary[] = [];
+    let startKey: Record<string, unknown> | undefined;
+
+    do {
+      const res = await this.doc.send(
+        new QueryCommand({
+          TableName: this.tableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+          FilterExpression: '#type = :draft',
+          ExpressionAttributeNames: { '#type': 'type' },
+          ExpressionAttributeValues: { ':pk': pk(leagueId), ':sk': 'DRAFT#', ':draft': 'DRAFT' },
+          ExclusiveStartKey: startKey,
+        }),
+      );
+      for (const item of (res.Items ?? []) as Item[]) {
+        summaries.push(summarizeDraft(stripKeys(item) as Omit<DraftState, 'teams' | 'picks'>));
+      }
+      startKey = res.LastEvaluatedKey;
+    } while (startKey);
+
+    return summaries.sort(byNewest);
   }
 
   async commit(leagueId: string, prev: DraftState, next: DraftState): Promise<CommitResult> {

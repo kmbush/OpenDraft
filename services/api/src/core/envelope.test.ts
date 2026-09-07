@@ -33,6 +33,16 @@ describe('mapEnvelopeToEvent', () => {
     });
   });
 
+  it('carries END_DRAFT as an admin event needing no payload', () => {
+    // The console offers this button; if the envelope drops it the button is a
+    // no-op the operator only discovers on the night.
+    expect(mapEnvelopeToEvent({ type: 'END_DRAFT', draftId: 'D1' })).toEqual({
+      ok: true,
+      admin: true,
+      event: { type: 'END_DRAFT' },
+    });
+  });
+
   it('rejects malformed payloads and internal/unknown types', () => {
     expect(
       mapEnvelopeToEvent({ type: 'SUBMIT_PICK', draftId: 'D1', payload: { teamSlot: 1 } }),

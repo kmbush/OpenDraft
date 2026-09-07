@@ -86,6 +86,8 @@ export function mapEnvelopeToEvent(env: InboundEnvelope): MapResult {
     case 'REVEAL_DONE':
     case 'ANNOUNCE_DONE':
       return { ok: true, admin: true, event: { type: env.type } };
+    case 'END_DRAFT':
+      return { ok: true, admin: true, event: { type: env.type } };
     case 'START_REVEAL': {
       if (!isRevealGame(p.game)) {
         return bad(`START_REVEAL requires game: one of ${REVEAL_GAME_IDS.join(', ')}`);

@@ -76,6 +76,17 @@ export async function handleHttp(deps: Deps, req: HttpRequest): Promise<HttpResp
     if (segments[2] === 'drafts') {
       // POST /leagues/{id}/drafts
       if (segments.length === 3 && req.method === 'POST') return createDraft(deps, req, leagueId);
+      // GET /leagues/{id}/drafts — the admin hub's list. Admin-only, unlike the
+      // single-draft GET below: knowing a draft's id is the capability that lets
+      // you view or pick in it (there is no player auth, by design — AD-8), so an
+      // unauthenticated list would hand every id to anyone who loads the site and
+      // turn an unguessable link into a public one.
+      if (segments.length === 3 && req.method === 'GET') {
+        if (!(await requireAdmin(deps, req))) {
+          return err(401, 'UNAUTHORIZED', 'Admin session required');
+        }
+        return json(200, { drafts: await deps.persistence.listDrafts(leagueId) });
+      }
       const draftId = segments[3];
       if (!draftId) return err(404, 'NOT_FOUND', 'Unknown route');
 
@@ -162,7 +173,13 @@ async function createDraft(deps: Deps, req: HttpRequest, leagueId: string): Prom
   const teams = buildTeams(body.teams, settings.teams);
   if (!teams) return err(400, 'BAD_REQUEST', 'teams must match settings.teams');
 
-  const state = newDraft({ leagueId, draftId: deps.env.newId(), settings, teams });
+  const state = newDraft({
+    leagueId,
+    draftId: deps.env.newId(),
+    settings,
+    teams,
+    createdAt: deps.env.now(),
+  });
   const withPool: DraftState =
     typeof body.poolSnapshotId === 'string'
       ? { ...state, poolSnapshotId: body.poolSnapshotId }

@@ -201,6 +201,91 @@ export interface DraftState {
    * to resolve the `available` list for auto-pick.
    */
   poolSnapshotId?: string;
+  /**
+   * Epoch ms the draft was created. Optional because drafts created before the
+   * admin hub existed don't carry one; those sort last in the hub and show no
+   * date, rather than being given a plausible-looking invented one.
+   */
+  createdAt?: number;
+  /**
+   * Set when an admin ended the draft before every pick was made. The status is
+   * still `COMPLETE` — a draft that stopped early is finished, read-only and
+   * exportable exactly like one that ran out of picks — but the hub and the
+   * export board say so, so a half-full board is never read as a finished one.
+   */
+  endedEarly?: boolean;
   /** Optimistic-concurrency token; the engine owns bumping it (DESIGN §4, §5.4). */
   version: number;
+}
+
+/**
+ * One row of the admin's draft list.
+ *
+ * Deliberately not a `DraftState`: listing a league's drafts must not drag every
+ * pick log across the wire, and the hub renders the *shape* of a draft — how big,
+ * how far it got, when — never its contents.
+ */
+export interface DraftSummary {
+  draftId: string;
+  status: DraftStatus;
+  teams: number;
+  rounds: number;
+  /** Picks committed so far, out of `teams * rounds`. */
+  picksMade: number;
+  /** Epoch ms; absent on drafts predating `DraftState.createdAt`. */
+  createdAt?: number;
+  endedEarly?: boolean;
+}
+
+/**
+ * Statuses a draft can be ended from: the ones where it is actually underway.
+ *
+ * A positive list rather than a pair of exclusions, so a status added later has
+ * to be considered rather than silently inheriting the power to end a draft.
+ *
+ * SETUP, ORDER_SET and REVEALING are absent: nothing is underway that ending
+ * could stop, and the admin can simply leave the draft. STARTING *is* included
+ * even though it has no picks either — once the go-live countdown is running,
+ * every board in the room is counting down and there is no other way to stop it.
+ * That does leave an empty COMPLETE record, which is the lesser problem.
+ *
+ * Lives here rather than in the engine because the admin console needs the same
+ * answer: a UI that offers "End draft" where the reducer rejects it is a button
+ * that does nothing, and the two drifting apart is exactly the bug this prevents.
+ */
+export const ENDABLE_STATUSES: readonly DraftStatus[] = [
+  'STARTING',
+  'ON_CLOCK',
+  'PICK_IN',
+  'PAUSED',
+];
+
+/** Whether `END_DRAFT` will be accepted for a draft in this status. */
+export function canEndDraft(status: DraftStatus): boolean {
+  return ENDABLE_STATUSES.includes(status);
+}
+
+/**
+ * Summarize a draft for the hub.
+ *
+ * `picksMade` is derived from the **pointer**, not `picks.length`, because the
+ * caller that matters — the list query — reads only DRAFT items and never loads
+ * a pick log at all. Deriving it one way means both callers agree by
+ * construction instead of by coincidence.
+ */
+export function summarizeDraft(state: Omit<DraftState, 'teams' | 'picks'>): DraftSummary {
+  return {
+    draftId: state.draftId,
+    status: state.status,
+    teams: state.settings.teams,
+    rounds: state.settings.rounds,
+    picksMade: Math.max(0, state.pointer - 1),
+    createdAt: state.createdAt,
+    endedEarly: state.endedEarly,
+  };
+}
+
+/** Newest first. Drafts with no `createdAt` predate it and sort to the bottom. */
+export function byNewest(a: DraftSummary, b: DraftSummary): number {
+  return (b.createdAt ?? 0) - (a.createdAt ?? 0);
 }

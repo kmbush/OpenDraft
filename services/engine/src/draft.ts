@@ -10,6 +10,8 @@ export interface NewDraftParams {
   draftId: string;
   settings: DraftSettings;
   teams: Team[];
+  /** Epoch ms, passed in because the engine is pure and owns no clock. */
+  createdAt: number;
 }
 
 /** A fresh draft in SETUP: no order, no picks, version 0. */
@@ -23,6 +25,7 @@ export function newDraft(params: NewDraftParams): DraftState {
     picks: [],
     pointer: 0,
     status: 'SETUP',
+    createdAt: params.createdAt,
     version: 0,
   };
 }

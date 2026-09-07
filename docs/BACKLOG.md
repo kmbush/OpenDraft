@@ -135,16 +135,27 @@ what remains is making a cold start resume on its own, without a `?draft=` link 
 
 ## Admin console → session hub
 
-*(Items 2, 3, 5 cluster here — a single hub reframe rather than a single-draft-scoped console.)*
+*(The hub itself, historical browsing and early termination have shipped; read-only records and delete
+remain.)*
 
-- [ ] **Reframe admin as a hub** `feature` — less "the current draft," more a home: create a draft (today's
-  experience) **or** browse existing sessions. Umbrella for the items below.
-- [ ] **Browse historical drafts** `feature` — list all past drafts, click into any, view and **export** it.
-  Needs a new "list drafts for league" API route (currently only single-draft GET exists).
+- [x] **Reframe admin as a hub** `feature` — the console's home with no draft loaded is now the hub, not
+  the new-draft form. Creating a draft is one choice among several rather than the only door.
+- [x] **Browse historical drafts** `feature` — `GET /leagues/{id}/drafts` returns summaries (status, size,
+  progress, created), newest first, and the hub lists them with **Open** and **Export** per row. One Query
+  on the league partition, never a Scan; the `type` filter is applied after the read, so it pages.
+  This closed a real hole: a draft was always safe in DynamoDB, but its id lived **only** in the creating
+  browser's `localStorage` — a dead laptop left a perfectly intact draft unreachable through the UI.
+- [x] **Terminate an ongoing draft** `feature` — `END_DRAFT` finishes a draft where it stands: picks made
+  are kept, it becomes a `COMPLETE`, exportable record flagged `endedEarly` so a half-full board is never
+  mistaken for a finished one, and clearing the timed fields cancels the scheduler through the same
+  transition. `ENDABLE_STATUSES` lives in `shared` so the console can't offer a button the reducer rejects.
+  Plus **Leave** — close a draft on your screen without touching it; it keeps running for everyone else.
+- [ ] **Delete a historical draft** `feature` — the other half of the terminate/delete pair. Destructive and
+  unrecoverable, so it needs more thought than a confirm dialog: probably a soft-delete/archive flag rather
+  than a real delete, given the whole point of the hub is that nothing is ever lost.
 - [ ] **Completed drafts are read-only records** `feature` — once `COMPLETE`, a draft cannot be
-  restarted/reopened; it remains a viewable/exportable historical record only.
-- [ ] **Terminate / delete drafts** `feature` — terminate an **ongoing** draft (end it early) and delete a
-  **historical** draft. Guard both with clear confirmation (destructive, admin-passcode gated).
+  restarted/reopened; it remains a viewable/exportable historical record only. The hub now surfaces old
+  drafts for reopening, which makes this the next thing worth doing.
 
 ## In-person event delight
 

@@ -2,7 +2,15 @@
  * In-memory port fakes + a spy broadcaster for testing the core pipeline without
  * AWS (CONVENTIONS §6). Not a test file.
  */
-import type { DraftState, LeagueMeta, OutboundMessage, PoolSnapshot } from '@opendraft/shared';
+import {
+  type DraftState,
+  type DraftSummary,
+  type LeagueMeta,
+  type OutboundMessage,
+  type PoolSnapshot,
+  byNewest,
+  summarizeDraft,
+} from '@opendraft/shared';
 import type {
   Broadcaster,
   CommitResult,
@@ -28,6 +36,13 @@ export class FakePersistence implements Persistence {
 
   seed(state: DraftState): void {
     this.drafts.set(this.draftKey(state.leagueId, state.draftId), clone(state));
+  }
+
+  async listDrafts(leagueId: string): Promise<DraftSummary[]> {
+    return [...this.drafts.values()]
+      .filter((d) => d.leagueId === leagueId)
+      .map(summarizeDraft)
+      .sort(byNewest);
   }
 
   async loadDraft(leagueId: string, draftId: string): Promise<DraftState | null> {

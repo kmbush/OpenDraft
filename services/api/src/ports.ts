@@ -5,6 +5,7 @@
  */
 import type {
   DraftState,
+  DraftSummary,
   LeagueMeta,
   OutboundMessage,
   Pick,
@@ -38,6 +39,11 @@ export interface Persistence {
   getLeague(leagueId: string): Promise<LeagueMeta | null>;
   /** Writes the DRAFT item plus one TEAM item per team, in SETUP. */
   createDraft(state: DraftState): Promise<void>;
+  /**
+   * Every draft this league has ever run, newest first. Summaries only — the
+   * admin hub must not pull a pick log per row.
+   */
+  listDrafts(leagueId: string): Promise<DraftSummary[]>;
 
   putConnection(record: ConnectionRecord): Promise<void>;
   deleteConnection(leagueId: string, connectionId: string): Promise<void>;

@@ -48,7 +48,7 @@ export function makeSettings(overrides: Partial<DraftSettings> = {}): DraftSetti
 /** Build a draft already in ORDER_SET with the given order (default identity). */
 export function setupDraft(settings: DraftSettings, order?: number[]): DraftState {
   const teams = makeTeams(settings.teams);
-  const base = newDraft({ leagueId: 'L1', draftId: 'D1', settings, teams });
+  const base = newDraft({ leagueId: 'L1', draftId: 'D1', settings, teams, createdAt: 0 });
   return {
     ...base,
     order: order ?? teams.map((t) => t.slot),

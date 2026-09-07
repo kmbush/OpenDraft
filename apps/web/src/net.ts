@@ -120,6 +120,6 @@ async function http<T>(method: string, path: string, body?: unknown, token?: str
 }
 
 export const api = {
-  get: <T>(path: string) => http<T>('GET', path),
+  get: <T>(path: string, token?: string) => http<T>('GET', path, undefined, token),
   post: <T>(path: string, body?: unknown, token?: string) => http<T>('POST', path, body, token),
 };
