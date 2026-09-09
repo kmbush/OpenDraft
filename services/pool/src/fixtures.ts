@@ -1,8 +1,9 @@
 /**
  * Handcrafted fixture mimicking Sleeper's `/v1/players/nfl` shape. Covers IDP,
  * inactive/retired, mixed/granular positions, full_name-only names, null ranks,
- * undraftable positions, and team-less (unsigned) players — so the builder is
- * tested offline (CONVENTIONS §6). Not a test file itself.
+ * undraftable positions, team-less (unsigned) players, and — the case real data
+ * forced — players Sleeper still calls active years after they stopped playing.
+ * The builder is tested offline against this (CONVENTIONS §6). Not a test file.
  */
 import type { SleeperPlayerMap } from './sleeper.js';
 
@@ -16,6 +17,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'CHI',
     search_rank: 1,
     active: true,
+    depth_chart_order: 1,
   },
   qbMahomes: {
     player_id: 'qbMahomes',
@@ -25,6 +27,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'KC',
     search_rank: 5,
     active: true,
+    depth_chart_order: 1,
   },
   qbAllen: {
     player_id: 'qbAllen',
@@ -34,6 +37,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'BUF',
     search_rank: 10,
     active: true,
+    depth_chart_order: 1,
   },
 
   // RB — 3 provided, cap keeps 2; Moss (worst rank) is dropped.
@@ -45,6 +49,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'PHI',
     search_rank: 3,
     active: true,
+    depth_chart_order: 1,
   },
   rbBijan: {
     player_id: 'rbBijan',
@@ -54,6 +59,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'ATL',
     search_rank: 8,
     active: true,
+    depth_chart_order: 1,
   },
   rbMoss: {
     player_id: 'rbMoss',
@@ -63,6 +69,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'CIN',
     search_rank: 200,
     active: true,
+    depth_chart_order: 1,
   },
 
   // WR — includes a null-search_rank player that must sort last and be dropped.
@@ -74,6 +81,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'MIN',
     search_rank: 1,
     active: true,
+    depth_chart_order: 1,
   },
   wrChase: {
     player_id: 'wrChase',
@@ -83,6 +91,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'CIN',
     search_rank: 2,
     active: true,
+    depth_chart_order: 1,
   },
   wrNoRank: {
     player_id: 'wrNoRank',
@@ -92,6 +101,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'HOU',
     search_rank: null,
     active: true,
+    depth_chart_order: 1,
   },
 
   teKelce: {
@@ -102,6 +112,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'KC',
     search_rank: 20,
     active: true,
+    depth_chart_order: 1,
   },
   kButker: {
     player_id: 'kButker',
@@ -111,6 +122,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'KC',
     search_rank: 300,
     active: true,
+    depth_chart_order: 1,
   },
   defPHI: {
     player_id: 'PHI',
@@ -120,6 +132,8 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'PHI',
     search_rank: 400,
     active: true,
+    // Deliberately no depth chart and no news — that is exactly how Sleeper
+    // carries team defenses, and why `isCurrent` has to exempt them.
   },
 
   // IDP — granular positions collapse to DL/LB/DB and must survive the cap.
@@ -132,6 +146,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     fantasy_positions: ['DL'],
     search_rank: 500,
     active: true,
+    depth_chart_order: 1,
   },
   dlDonald: {
     player_id: 'dlDonald',
@@ -141,6 +156,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'LAR',
     search_rank: 510,
     active: true,
+    depth_chart_order: 1,
   },
   lbWarner: {
     player_id: 'lbWarner',
@@ -150,6 +166,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'SF',
     search_rank: 520,
     active: true,
+    depth_chart_order: 1,
   },
   lbSmith: {
     player_id: 'lbSmith',
@@ -159,6 +176,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'BAL',
     search_rank: 530,
     active: true,
+    depth_chart_order: 1,
   },
   dbGardner: {
     player_id: 'dbGardner',
@@ -168,6 +186,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'NYJ',
     search_rank: 540,
     active: true,
+    depth_chart_order: 1,
   },
   // Position resolvable only via fantasy_positions.
   dbJames: {
@@ -179,6 +198,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     fantasy_positions: ['DB'],
     search_rank: 550,
     active: true,
+    depth_chart_order: 1,
   },
 
   // Excluded: no current team (unsigned FA) even with a top rank — must be dropped.
@@ -189,9 +209,35 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     position: 'WR',
     search_rank: 0,
     active: true,
+    depth_chart_order: 1,
   },
 
   // Excluded: inactive, retired, and an undraftable position — all must vanish.
+  // The Roethlisberger case, from real Sleeper data: every flag says starting QB,
+  // but no depth chart and the last news item is four years old.
+  qbRetiredButActive: {
+    player_id: 'qbRetiredButActive',
+    first_name: 'Ben',
+    last_name: 'Roethlisberger',
+    position: 'QB',
+    team: 'PIT',
+    search_rank: 2,
+    active: true,
+    status: 'Active',
+    news_updated: 1_643_296_817_250,
+  },
+  // No depth chart, but news this week — a practice-squad or deep-bench player.
+  // Must survive: ~300 genuinely current players look exactly like this.
+  wrFreshNewsNoDepthChart: {
+    player_id: 'wrFreshNewsNoDepthChart',
+    first_name: 'Fresh',
+    last_name: 'Newsman',
+    position: 'WR',
+    team: 'SEA',
+    search_rank: 3,
+    active: true,
+    news_updated: 1_788_700_000_000,
+  },
   inactiveWR: {
     player_id: 'inactiveWR',
     first_name: 'Retired',
@@ -200,6 +246,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'DAL',
     search_rank: 1,
     active: false,
+    depth_chart_order: 1,
   },
   retiredRB: {
     player_id: 'retiredRB',
@@ -210,6 +257,7 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     status: 'Retired',
     search_rank: 4,
     active: true,
+    depth_chart_order: 1,
   },
   punter1: {
     player_id: 'punter1',
@@ -219,5 +267,6 @@ export const SLEEPER_FIXTURE: SleeperPlayerMap = {
     team: 'DEN',
     search_rank: 250,
     active: true,
+    depth_chart_order: 1,
   },
 };
