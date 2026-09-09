@@ -15,6 +15,11 @@ export const SLEEPER_PLAYERS_URL = 'https://api.sleeper.app/v1/players/nfl';
  */
 export interface SleeperPlayer {
   player_id?: string | null;
+  /** Epoch ms of the last news item. The strongest staleness signal Sleeper has. */
+  news_updated?: number | null;
+  /** Set only for players actually on an NFL depth chart. */
+  depth_chart_order?: number | null;
+  depth_chart_position?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   full_name?: string | null;
@@ -23,7 +28,6 @@ export interface SleeperPlayer {
   active?: boolean | null;
   status?: string | null;
   search_rank?: number | null;
-  depth_chart_order?: number | null;
   team?: string | null;
 }
 
@@ -74,14 +78,60 @@ export function normalizePosition(sp: SleeperPlayer): Position | null {
 }
 
 /**
- * Whether the player still plays. Retired/inactive are dropped (AD-5); injured
- * (IR, etc.) are kept because they are still rostered/draftable.
+ * Whether the player still plays, per Sleeper's own flags.
+ *
+ * Necessary but nowhere near sufficient — see `isCurrent`. Retired/inactive are
+ * dropped (AD-5); injured (IR, etc.) are kept because they are still draftable.
  */
 export function isPlaying(sp: SleeperPlayer): boolean {
   if (sp.active === false) return false;
   const status = (sp.status ?? '').trim().toLowerCase();
   return status !== 'inactive' && status !== 'retired';
 }
+
+/** How stale a player's last news may be before we stop believing they play. */
+export const STALE_NEWS_MS = 400 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the player is plausibly on a roster *this* season.
+ *
+ * Sleeper's own flags are not enough on their own, and the reason is worth
+ * stating precisely: Ben Roethlisberger retired after 2021 and his record still
+ * reads `active: true`, `status: "Active"`, `team: "PIT"`, `search_rank: 176`.
+ * Every field the builder used to consult says he is a starting NFL quarterback.
+ *
+ * Two independent signals catch that, and it takes *either* — not both, because
+ * each has a blind spot:
+ *
+ *  - **A depth-chart entry.** Roethlisberger has none. But ~300 genuinely current
+ *    players (practice squad, deep bench) have none either, so this alone
+ *    over-cuts badly.
+ *  - **Recent news.** His last item is from January 2022, the week he retired.
+ *    But ~50 rostered players have no news at all, so this alone over-cuts too.
+ *
+ * Team defenses are exempt: they never appear on a depth chart and never
+ * generate news, so any freshness rule would delete all 32 of them.
+ */
+export function isCurrent(sp: SleeperPlayer, position: Position, now: number): boolean {
+  if (position === 'DEF') return true;
+  if (sp.depth_chart_order !== null && sp.depth_chart_order !== undefined) return true;
+  if ((sp.depth_chart_position ?? '').trim()) return true;
+  const news = sp.news_updated;
+  return typeof news === 'number' && now - news <= STALE_NEWS_MS;
+}
+
+/**
+ * Players Sleeper insists are active who are not.
+ *
+ * The escape hatch for the case no signal can reach: a retired player whom
+ * Sleeper still lists on a depth chart with fresh news. Aaron Donald retired in
+ * 2024 and his record reads `LDE #1` with news from two days ago — there is
+ * nothing in the data to distinguish him from a starter, so a human has to say
+ * so. Keyed by Sleeper `player_id`, which never changes.
+ */
+export const RETIRED_OVERRIDES: ReadonlySet<string> = new Set([
+  '2227', // Aaron Donald — retired March 2024; Sleeper still lists him LDE #1
+]);
 
 /**
  * The only network access in this package. Fetches the full Sleeper pool.

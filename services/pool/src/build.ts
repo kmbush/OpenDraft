@@ -5,8 +5,9 @@
  * given its inputs, so it is exhaustively unit-testable against a fixture.
  *
  * Pipeline: normalize → drop non-playing → drop team-less (retired/unsigned) →
- * keep top-N per position by `search_rank` → DISCARD rank → sort
- * `(position, lastName, firstName)`.
+ * drop players who aren't plausibly on a roster this season (`isCurrent`) → drop
+ * known-retired overrides → keep top-N per position by `search_rank` → DISCARD
+ * rank → sort `(position, lastName, firstName)`.
  * Rank is read only here to select/order the top-N and is never emitted (AD-6):
  * the output objects are plain `Player`s, so no ranking signal can exist in them
  * by construction. Team abbr + bye week ARE carried — they are factual identity /
@@ -17,8 +18,10 @@ import { positionRank } from '@opendraft/shared';
 import { byeForTeam } from './byes.js';
 import type { SnapshotConfig } from './config.js';
 import {
+  RETIRED_OVERRIDES,
   type SleeperPlayer,
   type SleeperPlayerMap,
+  isCurrent,
   isPlaying,
   normalizePosition,
 } from './sleeper.js';
@@ -58,6 +61,10 @@ export function buildSnapshot(raw: SleeperPlayerMap, config: SnapshotConfig): Po
     if (config.keepPerPosition[position] === undefined) continue; // position not drafted
     const id = sp.player_id ?? key;
     if (!id) continue;
+    // Sleeper's own `active`/`status` flags cannot be trusted alone — see
+    // `isCurrent`. A player it still calls a starting QB may have retired in 2021.
+    if (!isCurrent(sp, position, config.now)) continue;
+    if (RETIRED_OVERRIDES.has(id)) continue;
     const { firstName, lastName } = normalizeName(sp);
     const team = sp.team?.trim();
     // Drop players with no current NFL team — retired players and unsigned free

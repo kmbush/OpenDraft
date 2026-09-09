@@ -24,7 +24,12 @@ export interface BuiltSnapshot {
 /** Fetch the live Sleeper pool and build a ranking-stripped snapshot under `snapshotId`. */
 export async function fetchAndBuildSnapshot(snapshotId: string): Promise<BuiltSnapshot> {
   const raw = await fetchSleeperPlayers();
-  const snapshot = buildSnapshot(raw, { snapshotId, keepPerPosition: DEFAULT_KEEP_PER_POSITION });
+  const snapshot = buildSnapshot(raw, {
+    snapshotId,
+    keepPerPosition: DEFAULT_KEEP_PER_POSITION,
+    // The one clock read in the job, kept out of the pure builder.
+    now: Date.now(),
+  });
   return { snapshot, rawCount: Object.keys(raw).length };
 }
 

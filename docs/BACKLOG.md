@@ -14,6 +14,20 @@ discovered work in the same change. Tags: `bug` · `feature` · `research` · `a
 
 ## Recently shipped
 
+- [x] **Retired players in the pool, and real players missing from it** `bug` — Ben Roethlisberger was
+  draftable. Sleeper's own record still reads `active: true`, `status: "Active"`, `team: "PIT"`,
+  `search_rank: 176` — every flag the builder consulted said starting quarterback. Two fields expose him:
+  he is on no depth chart, and his last news item is from the week he retired in January 2022. `isCurrent`
+  now requires **either** signal, because each alone over-cuts (~300 current players have no depth chart;
+  ~50 rostered players have no news). **Team defenses are exempt** — all 32 have neither, so any freshness
+  rule that forgets them deletes every DEF.
+  Aaron Donald needed a manual override: Sleeper lists him `LDE #1` with news from two days ago, and no
+  field can distinguish him from a starter.
+  The larger bug was the other way round: the per-position caps were cutting **1,312 rostered players**,
+  including Cooper Kupp, Justin Fields and Darren Waller. WR kept 80 of 282. Offensive caps now sit above
+  the number of players who exist, so the cap stops binding and `isCurrent` decides. Pool 444 → **1,039**
+  (41KB → 96KB); IDP stays capped, since no format drafts 400 defensive backs.
+
 - [x] **The board has sound** `feature` — a registry of named board moments (pick made, on the clock, timer
   warning, per-second tick, auto-pick, draft complete, reveal flutter, reveal beat, reveal finale) mapped to sounds by
   swappable **packs**: *Gameday* (broadcast brass + ref whistle), *Arena* (organ, air horns, crowd) and

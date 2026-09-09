@@ -5,9 +5,13 @@ import { TEAM_BYE, byeForTeam } from './byes.js';
 import type { SnapshotConfig } from './config.js';
 import { SLEEPER_FIXTURE } from './fixtures.js';
 
+/** Fixed "now" so news-staleness assertions never drift with the wall clock. */
+const NOW = 1_788_800_000_000;
+
 const CONFIG: SnapshotConfig = {
   snapshotId: '2026-07-03',
   keepPerPosition: { QB: 2, RB: 2, WR: 2, TE: 1, K: 1, DEF: 1, DL: 2, LB: 2, DB: 2 },
+  now: NOW,
 };
 
 /** Same grouping order the builder emits; used to verify the sort independently. */
@@ -136,8 +140,48 @@ describe('position-aware top-N and filtering (AD-5)', () => {
   });
 
   it('omits positions absent from the config entirely', () => {
-    const s = buildSnapshot(SLEEPER_FIXTURE, { snapshotId: 'x', keepPerPosition: { QB: 5 } });
+    const s = buildSnapshot(SLEEPER_FIXTURE, {
+      snapshotId: 'x',
+      keepPerPosition: { QB: 5 },
+      now: NOW,
+    });
     expect(new Set(s.players.map((p) => p.position))).toEqual(new Set(['QB']));
+  });
+
+  it('drops a player Sleeper still calls active years after he stopped playing', () => {
+    // The real bug: `active: true`, `status: "Active"`, a team, and a good
+    // search_rank. Every flag the builder used to read says starting QB.
+    const stale = SLEEPER_FIXTURE.qbRetiredButActive;
+    expect(stale?.active).toBe(true);
+    expect(stale?.status).toBe('Active');
+    expect(stale?.team).toBe('PIT');
+    expect(byId(build(), 'qbRetiredButActive')).toBeUndefined();
+  });
+
+  it('keeps a rostered player who has news but no depth chart', () => {
+    // ~300 current players look like this. A depth-chart-only rule would cut them.
+    // Built with room at WR so the cap can't be what decides it.
+    const s = buildSnapshot(SLEEPER_FIXTURE, {
+      snapshotId: 'x',
+      keepPerPosition: { WR: 10 },
+      now: NOW,
+    });
+    expect(s.players.some((p) => p.id === 'wrFreshNewsNoDepthChart')).toBe(true);
+  });
+
+  it('keeps team defenses, which have neither news nor a depth chart', () => {
+    // Any freshness rule that forgets to exempt DEF silently deletes all 32.
+    expect(byId(build(), 'PHI')).toBeDefined();
+  });
+
+  it('drops a player named in the retired overrides even when the data looks live', () => {
+    const donald = { ...SLEEPER_FIXTURE.dlDonald, player_id: '2227' };
+    const s = buildSnapshot(
+      { ...SLEEPER_FIXTURE, dlDonald: donald },
+      { snapshotId: 'x', keepPerPosition: { DL: 5 }, now: NOW },
+    );
+    // Sleeper lists him on a depth chart with fresh news — only a human can know.
+    expect(s.players.some((p) => p.id === '2227')).toBe(false);
   });
 
   it('carries snapshotId and source attribution', () => {
